@@ -5,6 +5,7 @@ patches {
         description = "Morphe patches for futatter 3.1.1"
         source = "https://github.com/rikunode/futatabi"
         author = "rikunode"
+        contact = "https://github.com/rikunode"
         website = "https://github.com/rikunode/futatabi"
         license = "GPLv3"
     }

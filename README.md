@@ -4,13 +4,17 @@ Morphe patch project targeting **futatter 3.1.1** (`com.Nanasaki.ftutter`, versi
 
 ## Status
 
-**Scaffold only; no functional patch is published.** The exact target APK has not yet been available for fingerprint verification. ADB has no connected device, so the mandatory `adb reverse` integration gate has not run. Do not use this repository as a functional patch yet.
+**Scaffold and an offline ADB gate fixture only; no functional patch is published.** The exact target XAPK has not been downloaded and independently SHA-256-verified yet. The mandatory device gate has not run. Do not use this repository as a functional patch yet.
 
 ## Planned scope
 
 - Fail-closed banner-ad suppression at the `google_mobile_ads` `loadBannerAd` handler; rewarded advertising remains untouched.
 - Read-only local Futaba-compatible bridge with startup ContentProvider, catalog, thread, images, persistent virtual numeric IDs, Shift_JIS rendering, blocked POST and respectful cache/rate-limits.
 - Aimoge official API adapter; Animanch parser; Mebuki placeholder disabled in v1.
+
+## Offline ADB reverse gate fixture
+
+Run `python tests/adb_reverse_fixture.py` on Windows. It binds only to `127.0.0.1:18765` and returns a fixed Shift_JIS catalog, fixed thread, and a self-contained PNG thumbnail; all POST requests return HTTP 403. With an Android device attached, use `adb reverse tcp:18765 tcp:18765` and try adding `http://127.0.0.1:18765/aimoge/` as a board in the unmodified futatter app. Verify board admission, listing, existing catalog, thread/image display, and persistence across app restart. These checks **have not yet passed**. No bridge implementation may proceed before all five are verified.
 
 ## Board registration (after the bridge is verified)
 

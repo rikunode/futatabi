@@ -33,11 +33,11 @@ Verified without installation:
 Offline fixed-response Windows fixture: `tests/adb_reverse_fixture.py`.
 
 ```powershell
-python tests/adb_reverse_fixture.py
-adb reverse tcp:18765 tcp:18765
+python tests/adb_reverse_fixture.py --port 18766
+adb -s <physical-device-serial> reverse tcp:18766 tcp:18766
 ```
 
-The fixture binds to **127.0.0.1:18765** and serves a fixed Shift_JIS Futaba-style catalog, thread and PNG thumbnail. All POST requests return HTTP 403. It never contacts third-party servers.
+For the physical-device gate, the fixture binds to **127.0.0.1:18766**, avoiding the unrelated Windows service on 18765. It serves a fixed Shift_JIS Futaba-style catalog, thread and PNG thumbnail. All POST requests return HTTP 403. It never contacts third-party servers. The default fixture port remains 18765 when no argument is provided; the eventual Android bridge still uses **18765**.
 
 Smoke test:
 
@@ -45,19 +45,19 @@ Smoke test:
 python -m unittest discover -s tests -v
 ```
 
-**Verified:** 1 smoke test passed. GET `/aimoge/futaba.php?mode=cat` = 200, Shift_JIS title decoded; GET `/aimoge/res/1001.htm` = 200; GET `/aimoge/thumb/1.png` = 200, valid PNG signature; POST = 403. Separate manual probe on temporary port 18766 produced the same results.
+**Verified: unit smoke test PASS on an ephemeral port (not port 18765).** GET `/aimoge/futaba.php?mode=cat` = 200, Shift_JIS title decoded; GET `/aimoge/res/1001.htm` = 200; GET `/aimoge/thumb/1.png` = 200, valid PNG signature; POST = 403. Additionally, after this change the actual CLI fixture was launched on **127.0.0.1:18766** and queried over HTTP: catalog 200 (355 bytes, Shift_JIS title readable), thread 200 (559 bytes, body readable), image 200 (68-byte PNG signature), POST 403. This is a Windows HTTP verification, **not** a five-point Android gate PASS.
 
-**Blocking issue:** the required **18765** is already bound on Windows by another project's `chatgpt-auditor/sync/collector.mjs` (`node.exe`, PID 58092 at inspection). It was intentionally left untouched. The fixed fixture therefore could not bind to the required port and the `adb reverse` gate cannot proceed as specified until the port is made available through an authorized change. A connected `emulator-5554` is not a substitute for the owner's physical-device gate.
+**Port distinction:** the required **18765** is already bound on Windows by another project's `chatgpt-auditor/sync/collector.mjs` (`node.exe`, PID 58092 at the earlier inspection); it must not be stopped or modified. Therefore, a real fixture HTTP bind/test on **18765** has **not** been performed. The approved physical-device gate instead uses **18766**. A connected `emulator-5554` is not a substitute for the owner's physical-device gate.
 
 Physical-device gate requires five separate observations on **unmodified futatter**:
 
-1. `http://127.0.0.1:18765/aimoge/` is accepted as a board.
+1. `http://127.0.0.1:18766/aimoge/` is accepted as a board.
 2. The board appears in the board list.
 3. The catalog renders in the existing catalog UI.
 4. The thread body and images render in the existing thread UI.
 5. The registered board survives an app restart.
 
-**None of the five is verified.** Stop before the ContentProvider bridge/adapters until all five pass.
+**None of the five is verified on the owner's physical device.** The last ADB listing showed `emulator-5554` only. With the fixture server running on Windows and the owner's physical device attached, select the physical device's exact serial for `adb -s <physical-device-serial> reverse tcp:18766 tcp:18766`, then perform each UI observation and record its result. Stop before the ContentProvider bridge/adapters until all five pass.
 
 ## Planned read-only bridge (not implemented)
 

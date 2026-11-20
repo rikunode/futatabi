@@ -86,10 +86,10 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=PORT)
     args = parser.parse_args()
-    if args.port != PORT:
-        parser.error("The required ADB reverse gate uses port 18765")
+    if args.port not in (PORT, 18766):
+        parser.error("Use port 18765 for production or 18766 for the ADB test gate")
     with ThreadingHTTPServer(("127.0.0.1", args.port), FixtureHandler) as server:
-        print(f"Fixture ready: http://127.0.0.1:{PORT}/aimoge/", flush=True)
+        print(f"Fixture ready: http://127.0.0.1:{args.port}/aimoge/", flush=True)
         server.serve_forever()
 
 

@@ -33,11 +33,12 @@ def sjis_html(body: str) -> bytes:
 
 def catalog() -> bytes:
     return sjis_html(
-        f"<div class='thre'>"
-        f"<a href='{BASE}res/{THREAD_ID}.htm'>"
-        f"<img src='{BASE}thumb/1.png' width='80' height='80'></a>"
-        f"<br><small>1</small><br>"
-        f"<blockquote>futatabi catalog fixture</blockquote></div>"
+        "<table id='cattable'><tbody><tr><td>"
+        f"<a href='res/{THREAD_ID}.htm'>"
+        f"<img src='thumb/1.png' width='80' height='80'></a>"
+        "<br><small>futatabi catalog fixture</small><br>"
+        "<font size='2'>1</font>"
+        "</td></tr></tbody></table>"
     )
 
 

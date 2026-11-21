@@ -4,3 +4,8 @@
 2026-11-21T19:10:57.739981+00:00 client=127.0.0.1 method=GET path='/aimoge/res/1001.htm' ua='Python-urllib/3.10'
 2026-11-21T19:10:57.741982+00:00 client=127.0.0.1 method=GET path='/aimoge/thumb/1.png' ua='Python-urllib/3.10'
 2026-11-21T19:10:57.743482+00:00 client=127.0.0.1 method=POST path='/aimoge/futaba.php' ua='Python-urllib/3.10'
+2026-11-21T19:18:15.025282+00:00 client=127.0.0.1 port=80 method=GET path='/aimoge/' ua='Mozilla/5.0 (Windows NT; Windows NT 10.0; ja-JP) WindowsPowerShell/5.1.26100.9818'
+2026-11-21T19:26:39.073727+00:00 client=127.0.0.1 port=53256 method=GET path='/aimoge/futaba.php?mode=cat' ua='Python-urllib/3.10'
+2026-11-21T19:26:39.075735+00:00 client=127.0.0.1 port=53256 method=GET path='/aimoge/res/1001.htm' ua='Python-urllib/3.10'
+2026-11-21T19:26:39.077235+00:00 client=127.0.0.1 port=53256 method=GET path='/aimoge/thumb/1.png' ua='Python-urllib/3.10'
+2026-11-21T19:26:39.078237+00:00 client=127.0.0.1 port=53256 method=POST path='/aimoge/futaba.php' ua='Python-urllib/3.10'

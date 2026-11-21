@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import base64
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
 
 PORT = 18765
@@ -55,6 +56,19 @@ def thread() -> bytes:
 
 
 class FixtureHandler(BaseHTTPRequestHandler):
+    def log_message(self, fmt: str, *args: object) -> None:
+        # Persist request method/path/User-Agent for the emulator registration gate.
+        from datetime import datetime, timezone
+        line = (
+            f"{datetime.now(timezone.utc).isoformat()} "
+            f"client={self.client_address[0]} method={self.command} "
+            f"path={getattr(self, 'path', '<unparsed>')!r} ua={self.headers.get('User-Agent', '<missing>')!r}\n"
+        )
+        log_path = Path(__file__).resolve().parent.parent / "docs" / "gate-evidence" / "fixture-access.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a", encoding="utf-8") as log:
+            log.write(line)
+
     def send_body(self, status: int, payload: bytes, kind: str) -> None:
         self.send_response(status)
         self.send_header("Content-Type", kind)

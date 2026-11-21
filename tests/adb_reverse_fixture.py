@@ -61,8 +61,9 @@ class FixtureHandler(BaseHTTPRequestHandler):
         from datetime import datetime, timezone
         line = (
             f"{datetime.now(timezone.utc).isoformat()} "
-            f"client={self.client_address[0]} method={self.command} "
-            f"path={getattr(self, 'path', '<unparsed>')!r} ua={self.headers.get('User-Agent', '<missing>')!r}\n"
+            f"client={self.client_address[0]} port={self.server.server_port} method={self.command} "
+            f"path={getattr(self, 'path', '<unparsed>')!r} "
+            f"ua={getattr(self, 'headers', {}).get('User-Agent', '<missing>')!r}\n"
         )
         log_path = Path(__file__).resolve().parent.parent / "docs" / "gate-evidence" / "fixture-access.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -100,8 +101,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=PORT)
     args = parser.parse_args()
-    if args.port not in (PORT, 18766):
-        parser.error("Use port 18765 for production or 18766 for the ADB test gate")
+    if args.port not in (PORT, 18766, 80):
+        parser.error("Use port 18765 (default), 18766 (emulator gate), or 80 (diagnostic only)")
     with ThreadingHTTPServer(("127.0.0.1", args.port), FixtureHandler) as server:
         print(f"Fixture ready: http://127.0.0.1:{args.port}/aimoge/", flush=True)
         server.serve_forever()

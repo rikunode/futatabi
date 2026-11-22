@@ -1,0 +1,59 @@
+package dev.rikunode.futatabi
+
+import app.morphe.patcher.patch.ApkFileType
+import app.morphe.patcher.patch.AppTarget
+import app.morphe.patcher.patch.Compatibility
+import app.morphe.patcher.patch.bytecodePatch
+import app.morphe.patcher.patch.resourcePatch
+import org.w3c.dom.Element
+
+/**
+ * The initial ContentProvider runs before FlutterActivity and starts the
+ * read-only loopback server. Clone app can execute in either order: the
+ * provider authority is derived from the current manifest package, and the
+ * runtime never relies on a hardcoded provider authority.
+ */
+private val bridgeManifestPatch = resourcePatch {
+    execute {
+        document("AndroidManifest.xml").use { document ->
+            val manifest = document.documentElement
+            val application = manifest.getElementsByTagName("application").item(0) as? Element
+                ?: throw IllegalStateException("futatabi: application manifest element missing")
+            val providerName = "dev.rikunode.futatabi.bridge.FutatabiProvider"
+            val providers = manifest.getElementsByTagName("provider")
+            if ((0 until providers.length).none {
+                    (providers.item(it) as? Element)?.getAttribute("android:name") == providerName
+                }
+            ) {
+                val provider = document.createElement("provider")
+                provider.setAttribute("android:name", providerName)
+                provider.setAttribute("android:authorities",
+                    manifest.getAttribute("package") + ".futatabi.init")
+                provider.setAttribute("android:exported", "false")
+                provider.setAttribute("android:initOrder", "100")
+                application.appendChild(provider)
+            }
+        }
+    }
+}
+
+@Suppress("unused")
+val bridgePatch = bytecodePatch(
+    name = "Local board bridge",
+    description = "Auto-register local boards and start a read-only in-process loopback server.",
+    default = true,
+) {
+    compatibleWith(
+        Compatibility(
+            name = "futatter",
+            packageName = "com.Nanasaki.ftutter",
+            apkFileType = ApkFileType.APK,
+            targets = listOf(AppTarget(version = "3.1.1", versionCode = 65)),
+        )
+    )
+    dependsOn(bridgeManifestPatch)
+    extendWith("extensions/futatter.mpe")
+    execute {
+        // The extension is merged before this block executes.
+    }
+}

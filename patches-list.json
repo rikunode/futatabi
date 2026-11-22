@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "patches": [
     {
       "name": "Block banner ads",
@@ -91,6 +91,37 @@
           "values": null
         }
       ]
+    },
+    {
+      "name": "Local board bridge",
+      "description": "Auto-register local boards and start a read-only in-process loopback server.",
+      "default": true,
+      "category": null,
+      "compatiblePackages": [
+        {
+          "packageName": "com.Nanasaki.ftutter",
+          "name": "futatter",
+          "description": null,
+          "apkFileType": "APK",
+          "appIconColor": null,
+          "signatures": null,
+          "targets": [
+            {
+              "version": "3.1.1",
+              "versionCodes": {
+                "ARM64_V8A": 65,
+                "ARMEABI_V7A": 65,
+                "X86_64": 65,
+                "X86": 65
+              },
+              "isExperimental": false,
+              "minSdk": null,
+              "description": null
+            }
+          ]
+        }
+      ],
+      "options": []
     }
   ]
 }

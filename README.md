@@ -1,87 +1,59 @@
 # futatabi
 
-Morphe patch project for **ふたったー (futatter) 3.1.1**, package `com.Nanasaki.ftutter`, versionCode **65**.
+**ふたったー 3.1.1（`com.Nanasaki.ftutter`、versionCode 65）専用のMorpheパッチセット。** GPL-3.0。
 
-**v0.1.0 scope:** Two default-enabled Morphe patches: **Block banner ads** and **Clone app**. Both passed an unsigned **base-APK-only** application/rebuild test. No signed/merged APK, app functionality, or original/clone coexistence has been verified yet. The board-addition gate failed on the unmodified Android emulator; bridge and adapters are not implemented.
+## v0.2.0 の機能
 
-## Target integrity
-
-The official APKPure-distributed XAPK, stored only in ignored `apk-inspection/`, was downloaded on Windows and checked:
-
-| Artifact | SHA-256 | Result |
+| パッチ | 既定 | 内容 |
 | --- | --- | --- |
-| XAPK (68,916,938 bytes) | `11dae3fa2c2882f1223cacbdc14b62bcf2d6ed04bc4436d9fc988e98d6ea53dc` | Exact match |
-| `com.Nanasaki.ftutter.apk` (base APK) | `f8093dd9cae64a48b0e74831800782a747045902e2171855a672195ef5690486` | Exact match |
+| Block banner ads | ON | `loadBannerAd`／`loadAdManagerBannerAd` のみを無効化。リワード広告の呼び出し先には手を加えない |
+| Clone app | ON | 既定ではパッケージ名に `.morphe` を追加し、元アプリと共存可能にする |
+| Local board bridge | ON | アプリ内ContentProviderから読み取り専用HTTPサーバーを起動し、**あいもげ**を既存の板一覧に自動追加 |
 
-The application is distributed as a **split XAPK**. End users must use a **merged APK** of the exact 3.1.1 release as input to Morphe, *not* an XAPK or an isolated base APK. A merged APK has not yet been patched or tested.
+### あいもげ
 
-## Banner patch (stage 3)
+- `http://127.0.0.1:18765/aimoge/` をFlutter SharedPreferences（`flutter.itaList`）へ冪等に追加。登録済みの板、既定の「ねこ」、ユーザーが追加した板は保持する
+- 127.0.0.1のHTTP Bridgeから `https://api.nijiurachan.net` の公開APIを呼び出す。API版 `2026-11-11`、板slug `aimg`、`X-Board-Key` と `/client-policy` の検証を使用
+- 取得はGETのみ。カタログ／スレ／JPEG変換サムネイルを、素のふたったーのカタログ／スレUIへ表示。Shift_JIS非対応文字は数値参照に変換し、HTMLをエスケープする。元サイトのJS、フォーム、投稿経路は引き継がない
+- POSTを含むGET以外の要求は **HTTP 403**。元サイトへ投稿・認証情報を中継しない
+- カタログ90秒、スレ30秒、画像10分のメモリキャッシュ。API取得を最低1.5秒間隔に制限し、画像レスポンスのサイズと配信元ドメインを制限する
+- 仮想スレ・画像IDは安定した**13桁**。画像は `{id}s.jpg` と `{id}.jpg` のふたば形式へ対応。動画のJPEG経路には動画本体を流さず公式サムネイルの静止画を使用
+- bind失敗時はBridgeのみ停止して、元アプリの起動を妨げない設計
 
-`BlockBannerAdsPatch.kt` targets `Lb6/I;->onMethodCall` using exact method signature, method strings, the original manager callback and load-error constructor signatures. It detects **both** `loadBannerAd` and `loadAdManagerBannerAd` and returns a normal `onAdFailedToLoad` plugin event through `Lb6/a;->k` before completing the Flutter method call. It does not change the `loadRewardedAd`, `loadRewardedInterstitialAd`, interstitial, native or app-open branches. Fingerprint or callback mismatch refuses application (fail-closed).
+**今回の未対応範囲:** あにまんはアダプタ未実装なので**新規ユーザーには自動登録しない**。めぶきも無効の受け口のみ。あにまんやめぶきへのGETは503、POSTは403。既存のユーザーが登録した板は削除しない。
 
-Verified without installation:
+## 導入
 
-- Gradle `:patches:generatePatchesList`: **BUILD SUCCESSFUL**; `patches/build/libs/patches-0.1.0.mpp` generated.
-- Morphe Desktop v1.18.1 against the verified **base APK only**, with `--unsigned`: **both** patches applied; PATCHING and REBUILDING succeeded, with no failed patches. `aapt` independently confirmed cloned package `com.Nanasaki.ftutter.morphe` and provider authorities prefixed with that cloned package.
-- Decompiled resulting patched DEX with JADX 1.5.7: the new initial guard dispatches only the two named banner commands, sends `new AbstractC1061f.c(0, "FutatabiBannerBlocked", …)` via the existing manager and returns; the remaining original dispatcher is retained.
-- **Not yet verified:** signing, merged-APK installation, real banner behavior, rewarded-ad regression behavior on a device.
+1. **ふたったー3.1.1** のスプリットXAPKを、すべての必要なスプリットを含む単一APKへマージする（分割されたベースAPKだけでは起動できない）。
+2. [Releases](https://github.com/rikunode/futatabi/releases) から `futatabi-patches-v0.2.0.mpp` と `SHA256SUMS` を取得し、ハッシュを照合。
+3. Morphe Managerへfutatabiのパッチソースを追加し、マージ済みAPKへ適用。パッチ3件はすべて既定ON。適用後のAPKは自分の端末用に署名・インストールする。
+4. ふたったーを起動し、利用規約に同意後、板一覧の「あいもげ」を開く。
 
-`apk-inspection/` contains only ignored local test inputs, tools and temporary outputs. Do not commit APKs, keystores or decompiled third-party sources.
+**クローンを使わない場合:** パッチ選択画面で **Clone app** をOFFにする。Morphe Desktopでは `--disable="Clone app"`。クローンの既定パッケージ名は `com.Nanasaki.ftutter.morphe` で、元の `com.Nanasaki.ftutter` とアプリデータを共有しない。
 
-## Clone app patch (default ON)
+**再インストールの注意:** パッケージ名や署名鍵が変わると、Android側で上書きインストールできないことがある。アプリを削除すると、そのパッケージのデータも失われる。重要な板・お気に入りなどは事前にバックアップすること。元アプリは不用意に削除しない。
 
-The **Clone app** patch is derived from [Morphe's official CloneAppPatch.kt](https://github.com/MorpheApp/morphe-patches/blob/main/patches/src/main/kotlin/app/morphe/patches/all/misc/clone/CloneAppPatch.kt), adapted for the pinned Morphe Patcher 1.15.1 resource API and scoped to futatter 3.1.1. Original Morphe/ReVanced attribution and the GPL-3.0 Section 7 notice are retained in the source.
+## 検証状況
 
-- Enabled by default; unchanged default `packageName` produces **`com.Nanasaki.ftutter.morphe`**, which is separate from the original `com.Nanasaki.ftutter`.
-- `updatePermissions=true` and `updateProviders=true` by default. The base APK's 4 original provider authorities and declared custom permission were rewritten in the unsigned static test.
-- To **disable cloning**, uncheck **Clone app** in the Morphe patch selection before patching, or use the desktop CLI `--disable="Clone app"`. To use a different clone identity, set its `packageName` option.
-- Clones are **not guaranteed to work**. The clone uses a different package identity, Android data location, and signing identity; **do not overwrite or uninstall your existing installation expecting its data to be preserved**. Installation of an APK signed with a different key over an existing package may require removal of that clone and will erase that clone's data. Back up any important app data before reinstalling or changing a package name.
-- Final tests by the owner: original + clone install side by side; banner hidden in catalog/thread; rewarded-ad option (24-hour hide) still functional. **All remain unverified.**
+2026-11-22、照合済みXAPKからAPKをマージし、3パッチ同時適用→開発署名（APK Signature Scheme v1/v2/v3照合）→Android API 36エミュレータへクローンをインストールした。
 
-**Future ContentProvider interaction:** the clone rewrites manifest authorities prefixed by the original package. The planned bridge must build or reference its authority from the actual application ID (e.g. `context.packageName + ".futatabi.bridge"`), rather than hardcode `com.Nanasaki.ftutter...`. There is **no bridge provider in v0.1.0**, so runtime compatibility cannot be tested yet. Reverify during stage 5.
+**エミュレータ実測PASS:** 元アプリとクローンの共存、Bridgeの127.0.0.1:18765待受、既存板を保持したあいもげ自動登録、再起動後の登録維持と重複防止、実APIのカタログ・スレ本文・レス番号・JPEG画像表示、動画サムネイル代替、POST 403。詳細は[統合試験記録](docs/bridge-v0.2.0-emulator-gate-20261122.md)。
 
-## ADB reverse gate (stage 4)
+**未検証:** 所有者実機でのインストールと広告非表示の視覚確認、リワード広告（視聴による24時間非表示）導線。これらは所有者の実機確認項目として残る。エミュレータの検証を実機検証済みとは表現しない。
 
-Offline fixed-response Windows fixture: `tests/adb_reverse_fixture.py`.
+## 対象ファイルの照合情報
 
-```powershell
-python tests/adb_reverse_fixture.py --port 18766
-adb -s <physical-device-serial> reverse tcp:18766 tcp:18766
-```
+| 入力 | SHA-256 |
+| --- | --- |
+| ふたったー3.1.1 XAPK（68,916,938 bytes） | `11dae3fa2c2882f1223cacbdc14b62bcf2d6ed04bc4436d9fc988e98d6ea53dc` |
+| ベースAPK（46,218,824 bytes） | `f8093dd9cae64a48b0e74831800782a747045902e2171855a672195ef5690486` |
 
-For the physical-device gate, the fixture binds to **127.0.0.1:18766**, avoiding the unrelated Windows service on 18765. It serves a fixed Shift_JIS Futaba-style catalog, thread and PNG thumbnail. All POST requests return HTTP 403. It never contacts third-party servers. The default fixture port remains 18765 when no argument is provided; the eventual Android bridge still uses **18765**.
+APK、XAPK、デコンパイル済みソース、個人用署名鍵はこのリポジトリ／Releaseには含めない。配布するのはパッチセット（.mpp）のみ。
 
-Smoke test:
+## 先行する実証・出典・ライセンス
 
-```powershell
-python -m unittest discover -s tests -v
-```
-
-**Verified: unit smoke test PASS on an ephemeral port (not port 18765).** GET `/aimoge/futaba.php?mode=cat` = 200, Shift_JIS title decoded; GET `/aimoge/res/1001.htm` = 200; GET `/aimoge/thumb/1.png` = 200, valid PNG signature; POST = 403. Additionally, after this change the actual CLI fixture was launched on **127.0.0.1:18766** and queried over HTTP: catalog 200 (355 bytes, Shift_JIS title readable), thread 200 (559 bytes, body readable), image 200 (68-byte PNG signature), POST 403. This is a Windows HTTP verification, **not** a five-point Android gate PASS.
-
-**Port distinction:** the required **18765** is already bound on Windows by another project's `chatgpt-auditor/sync/collector.mjs` (`node.exe`, PID 58092 at the earlier inspection); it must not be stopped or modified. Therefore, a real fixture HTTP bind/test on **18765** has **not** been performed. The approved physical-device gate instead uses **18766**. The owner has approved an emulator for the stage-4 gate, with final physical-device testing deferred until before a future release.
-
-The stage-4 emulator gate requires five separate observations on **unmodified futatter**:
-
-1. `http://127.0.0.1:18766/aimoge/` is accepted as a board.
-2. The board appears in the board list.
-3. The catalog renders in the existing catalog UI.
-4. The thread body and images render in the existing thread UI.
-5. The registered board survives an app restart.
-
-**Latest stage-4 result: FAIL.** On `emulator-5554` the unmodified app accepted the URL text in the board-add dialog, but submitting did not create a board; neither board list nor restart showed it. Gate items 1 and 2 FAIL, items 3–5 NOT TESTED. See [gate report and screenshots](docs/gate4-emulator-20261121.md). Stop before ContentProvider bridge/adapters until a later gate test passes. A physical-device gate is not a prerequisite for publishing the owner-approved v0.1.0 patch-only release.
-
-## Planned read-only bridge (not implemented)
-
-Board URLs after the gate:
-
-- Aimoge: `http://127.0.0.1:18765/aimoge/`
-- Animanch: `http://127.0.0.1:18765/animanch/`
-
-The proposed Android in-process ContentProvider HTTP bridge, Shift_JIS renderer, persistent numeric virtual ID mappings, image proxy, upstream caching/rate limits, Aimoge client policy, Animanch parser and disabled Mebuki adapter are **future stages only**.
-
-## Upstream and license
-
-GPL-3.0. The bundled Clone app derivative preserves Morphe's copyright notice, original ReVanced attribution and the original file-specific GPL-3.0 Section 7 additional-terms notice. [Haiagaru-Morphe by areteruhiro](https://github.com/areteruhiro/Haiagaru-Morphe) was confirmed GPL-3.0 and may be used as a reference for Animanch handling; no parser implementation is copied. Preserve all applicable copyright and license notices on redistribution.
-
-Release v0.1.0 is explicitly owner-approved for the two patch definitions **only**; no patched third-party APK is distributed.
+- [板リスト直接書き込み実証](docs/gate4-storage-direct-write-20261122.md)
+- [実物mayカタログ／スレの描画差分実証](docs/gate4-may-real-html-parser-20261122.md)
+- [公式あいもげAPI仕様](https://api.nijiurachan.net/ui)／[API利用ガイド](https://wiki.nijiurachan.net/運営公式/API利用ガイド)
+- Clone appは[Morphe公式CloneAppPatch.kt](https://github.com/MorpheApp/morphe-patches/blob/main/patches/src/main/kotlin/app/morphe/patches/all/misc/clone/CloneAppPatch.kt)からのGPL-3.0派生。著作権、ReVanced由来、GPL-3.0 第7条の追加表示をソースに保持
+- [Haiagaru-Morphe（GPL-3.0）](https://github.com/areteruhiro/Haiagaru-Morphe)は将来のあにまん対応における参考候補。今回は実装コードを流用していない

@@ -1,0 +1,328 @@
+package dev.rikunode.futatabi.bridge;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.net.Uri;
+import android.os.Bundle;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.text.Editable;
+import android.text.InputType;
+import android.text.TextWatcher;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/** Self-contained Android UI; does not modify Futatter's existing Flutter screens. */
+public final class FutatabiHomeActivity extends Activity {
+    private static final String STORE = "futatabi_extension_private";
+    private static final int CHOOSE_IMAGE = 12;
+    private final ExecutorService io = Executors.newSingleThreadExecutor();
+    private LinearLayout root;
+    private EditText bodyField, deleteKeyField;
+    private TextView notice, count;
+    private String threadId = "";
+    private final List<Uri> attached = new ArrayList<>();
+
+    private static final class Response {
+        final int status;
+        final String body;
+        Response(int status, String body) { this.status = status; this.body = body; }
+    }
+
+    @Override protected void onCreate(Bundle state) {
+        super.onCreate(state);
+        setTitle("futatabi");
+        home();
+    }
+    @Override protected void onDestroy() {
+        io.shutdownNow();
+        super.onDestroy();
+    }
+
+    private void startPage(String heading) {
+        ScrollView scroll = new ScrollView(this);
+        root = new LinearLayout(this);
+        root.setPadding(dp(18), dp(20), dp(18), dp(28));
+        root.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(root);
+        setContentView(scroll);
+        TextView title = new TextView(this);
+        title.setText(heading);
+        title.setTextSize(23);
+        title.setTextColor(Color.rgb(22, 35, 50));
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        root.addView(title);
+        notice = addText("");
+    }
+    private int dp(int v) { return Math.round(getResources().getDisplayMetrics().density * v); }
+
+    private TextView addText(String label) {
+        TextView text = new TextView(this);
+        text.setText(label);
+        text.setTextColor(Color.DKGRAY);
+        text.setTextSize(15);
+        text.setPadding(0, dp(9), 0, dp(9));
+        root.addView(text);
+        return text;
+    }
+
+    private Button action(String title, Runnable onTap) {
+        Button button = new Button(this);
+        button.setText(title);
+        root.addView(button);
+        button.setOnClickListener(v -> onTap.run());
+        return button;
+    }
+
+    private EditText input(String hint, String defaultValue, boolean multi) {
+        EditText text = new EditText(this);
+        text.setHint(hint);
+        text.setText(defaultValue);
+        if (multi) {
+            text.setSingleLine(false);
+            text.setMinLines(5);
+            text.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        } else text.setSingleLine(true);
+        root.addView(text);
+        return text;
+    }
+
+    private void updateNotice(String value) {
+        if (notice != null) notice.setText(value);
+    }
+
+    private void remote(String label, String method, String path, JSONObject payload,
+                        java.util.function.Consumer<Response> done) {
+        updateNotice(label + "…");
+        io.execute(() -> {
+            Response result;
+            try { result = invoke(method, path, payload); }
+            catch (Exception ex) { result = new Response(503, "通信エラー: " + ex.getClass().getSimpleName()); }
+            final Response value = result;
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                done.accept(value);
+            });
+        });
+    }
+
+    private Response invoke(String method, String path, JSONObject payload) throws Exception {
+        URL url = new URL("http://127.0.0.1:18765" + path);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setConnectTimeout(2500);
+        conn.setReadTimeout(25000);
+        conn.setRequestMethod(method);
+        conn.setInstanceFollowRedirects(false);
+        String token = getSharedPreferences(STORE, MODE_PRIVATE).getString("local_token", "");
+        conn.setRequestProperty("X-Futatabi-Token", token);
+        if (payload != null) {
+            byte[] bytes = payload.toString().getBytes(StandardCharsets.UTF_8);
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setDoOutput(true);
+            conn.setFixedLengthStreamingMode(bytes.length);
+            try (OutputStream out = conn.getOutputStream()) { out.write(bytes); }
+        }
+        try {
+            int code = conn.getResponseCode();
+            InputStream stream = code < 400 ? conn.getInputStream() : conn.getErrorStream();
+            if (stream == null) return new Response(code, "");
+            try (InputStream in = stream) {
+                byte[] content = AimogeWriteClient.bounded(in, 2_000_000);
+                return new Response(code, new String(content, StandardCharsets.UTF_8));
+            }
+        } finally { conn.disconnect(); }
+    }
+
+    private void home() {
+        startPage("futatabi • 投稿");
+        addText("通常のふたったーの閲覧画面・ふたば板の投稿には干渉しません。");
+        remote("ログイン状態を取得", "GET", "/ext/status", null, result -> {
+            if (result.status != 200) {
+                updateNotice("Bridge接続不可: HTTP " + result.status);
+                return;
+            }
+            try {
+                boolean loggedIn = new JSONObject(result.body).optBoolean("aimoge");
+                updateNotice("あいもげ：" + (loggedIn ? "ログイン中" : "未ログイン"));
+            } catch (Exception ex) { updateNotice("状態を確認できませんでした"); }
+        });
+        addText("あいもげ");
+        action("新しいスレを立てる", () -> compose(""));
+        action("スレ一覧から返信", this::threadPicker);
+        action("ログイン（PKCE）", this::login);
+        action("ログアウト", () -> remote("ログアウト", "POST",
+                "/ext/login/aimoge/logout", new JSONObject(), result -> home()));
+        action("自分の投稿履歴", this::history);
+        addText("あにまん：読み取り・投稿対応は次の段階で有効化します");
+        addText("めぶき：v0.4.0予定（現在は無効）");
+    }
+
+    private void login() {
+        remote("あいもげの認証URLを作成", "POST", "/ext/login/aimoge/start",
+                new JSONObject(), result -> {
+                    if (result.status != 200) {
+                        updateNotice("ログイン開始失敗 HTTP " + result.status + ": " + result.body);
+                        return;
+                    }
+                    try {
+                        String url = new JSONObject(result.body).getString("authorizationUrl");
+                        if (!url.startsWith("https://")) throw new IllegalArgumentException("Invalid auth URL");
+                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+                        updateNotice("ブラウザの承認後、この画面に戻ってください。");
+                    } catch (Exception ex) { updateNotice("認証URLを開けませんでした"); }
+                });
+    }
+
+    private void threadPicker() {
+        startPage("あいもげ • 返信するスレを選ぶ");
+        action("戻る", this::home);
+        remote("スレ一覧を取得", "GET", "/ext/threads?board=aimoge", null, result -> {
+            if (result.status != 200) { updateNotice("取得失敗 HTTP " + result.status); return; }
+            updateNotice("返信先を選択");
+            try {
+                JSONArray threads = new JSONObject(result.body).getJSONArray("threads");
+                for (int i = 0; i < threads.length(); i++) {
+                    JSONObject entry = threads.getJSONObject(i);
+                    String id = UUID.fromString(entry.getString("id")).toString();
+                    String title = entry.optString("title", "スレ");
+                    if (title.length() > 90) title = title.substring(0, 90);
+                    action(title + " (レス " + entry.optInt("replies") + ")", () -> compose(id));
+                }
+            } catch (Exception ex) { updateNotice("スレ一覧を解析できませんでした"); }
+        });
+    }
+
+    private void compose(String replyTo) {
+        threadId = replyTo;
+        attached.clear();
+        startPage(replyTo.isEmpty() ? "あいもげ • 新規スレ" : "あいもげ • レス投稿");
+        action("戻る", replyTo.isEmpty() ? this::home : this::threadPicker);
+        addText("本文（最大4,000字）");
+        bodyField = input("本文", "", true);
+        count = addText("0 / 4000");
+        bodyField.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence s,int start,int c,int a) {}
+            public void onTextChanged(CharSequence s,int start,int before,int c) {
+                count.setText(s.toString().codePointCount(0,s.length()) + " / 4000");
+            }
+            public void afterTextChanged(Editable s) {}
+        });
+        addText("削除キー（投稿ごとに保存します）");
+        deleteKeyField = input("削除キー", randomKey(), false);
+        final int maxFiles = replyTo.isEmpty() ? 1 : 3;
+        TextView files = addText("添付：0 / " + maxFiles);
+        action("画像を追加", () -> {
+            if (attached.size() >= maxFiles) { updateNotice("添付上限に達しました"); return; }
+            Intent pick = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            pick.addCategory(Intent.CATEGORY_OPENABLE);
+            pick.setType("image/*");
+            startActivityForResult(pick, CHOOSE_IMAGE);
+        });
+        action("投稿内容を送信", () -> {
+            String text = bodyField.getText().toString();
+            if (text.isEmpty() || text.codePointCount(0, text.length()) > 4000) {
+                updateNotice("本文を1〜4,000字で入力してください");
+                return;
+            }
+            final String deleteKey = deleteKeyField.getText().toString();
+            if (deleteKey.isEmpty() || deleteKey.length() > 64) {
+                updateNotice("削除キーは1〜64文字で入力してください");
+                return;
+            }
+            final List<Uri> picks = new ArrayList<>(attached);
+            updateNotice("送信内容を準備中…");
+            io.execute(() -> {
+                try {
+                    JSONObject payload = new JSONObject();
+                    payload.put("body", text);
+                    payload.put("deleteKey", deleteKey);
+                    if (!replyTo.isEmpty()) payload.put("threadId", replyTo);
+                    JSONArray attachments = new JSONArray();
+                    int totalSize = 0;
+                    for (Uri uri : picks) {
+                        byte[] bytes;
+                        try (InputStream stream = getContentResolver().openInputStream(uri)) {
+                            if (stream == null) throw new IllegalArgumentException("画像を開けません");
+                            bytes = AimogeWriteClient.bounded(stream, 20_971_520);
+                        }
+                        totalSize += bytes.length;
+                        if (totalSize > 20_971_520) throw new IllegalArgumentException("添付の合計は20MiB以下");
+                        String mime = getContentResolver().getType(uri);
+                        JSONObject file = new JSONObject();
+                        file.put("mime", mime == null ? "application/octet-stream" : mime);
+                        file.put("name", "attachment");
+                        file.put("base64", android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP));
+                        attachments.put(file);
+                    }
+                    if (attachments.length() > 0) payload.put("attachments", attachments);
+                    Response result = invoke("POST", "/ext/aimoge/post", payload);
+                    runOnUiThread(() -> {
+                        if (isFinishing() || isDestroyed()) return;
+                        if (result.status == 201) {
+                            startPage("投稿成功");
+                            addText(result.body);
+                            action("ホームへ", this::home);
+                        } else updateNotice("投稿失敗 HTTP " + result.status + ": " + result.body);
+                    });
+                } catch (Exception ex) {
+                    runOnUiThread(() -> updateNotice("投稿準備失敗: " + ex.getMessage()));
+                }
+            });
+        });
+        addText(replyTo.isEmpty() ? "スレ立て後60秒のクールダウン・1時間60スレまで。"
+                : "レス送信後10秒のクールダウン。");
+    }
+
+    @Override protected void onActivityResult(int code, int result, Intent data) {
+        super.onActivityResult(code, result, data);
+        if (code == CHOOSE_IMAGE && result == RESULT_OK && data != null && data.getData() != null) {
+            attached.add(data.getData());
+            updateNotice("画像を" + attached.size() + "件選択しました");
+        }
+    }
+
+    private String randomKey() {
+        byte[] b = new byte[24];
+        new SecureRandom().nextBytes(b);
+        return android.util.Base64.encodeToString(b,
+                android.util.Base64.URL_SAFE | android.util.Base64.NO_WRAP | android.util.Base64.NO_PADDING);
+    }
+
+    private void history() {
+        startPage("自分の投稿履歴");
+        action("戻る", this::home);
+        SharedPreferences prefs = getSharedPreferences(STORE, MODE_PRIVATE);
+        int count = 0;
+        for (java.util.Map.Entry<String,?> entry : prefs.getAll().entrySet()) {
+            if (!entry.getKey().startsWith("history_")) continue;
+            try {
+                JSONObject obj = new JSONObject(String.valueOf(entry.getValue()));
+                JSONObject result = obj.getJSONObject("result");
+                addText("投稿結果: " + result.toString() +
+                        "\n削除キー: " + obj.optString("deleteKey", ""));
+                count++;
+            } catch (Exception ignored) {}
+        }
+        if (count == 0) addText("まだ投稿履歴がありません。");
+    }
+}

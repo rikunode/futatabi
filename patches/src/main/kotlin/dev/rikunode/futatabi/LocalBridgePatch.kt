@@ -33,6 +33,26 @@ private val bridgeManifestPatch = resourcePatch {
                 provider.setAttribute("android:initOrder", "100")
                 application.appendChild(provider)
             }
+            val activityName = "dev.rikunode.futatabi.bridge.FutatabiHomeActivity"
+            val activities = manifest.getElementsByTagName("activity")
+            if ((0 until activities.length).none {
+                    (activities.item(it) as? Element)?.getAttribute("android:name") == activityName
+                }
+            ) {
+                val activity = document.createElement("activity")
+                activity.setAttribute("android:name", activityName)
+                activity.setAttribute("android:exported", "true")
+                activity.setAttribute("android:label", "futatabi 投稿")
+                val intentFilter = document.createElement("intent-filter")
+                val action = document.createElement("action")
+                action.setAttribute("android:name", "android.intent.action.MAIN")
+                intentFilter.appendChild(action)
+                val category = document.createElement("category")
+                category.setAttribute("android:name", "android.intent.category.LAUNCHER")
+                intentFilter.appendChild(category)
+                activity.appendChild(intentFilter)
+                application.appendChild(activity)
+            }
         }
     }
 }

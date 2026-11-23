@@ -2,6 +2,8 @@
 
 **ふたったー 3.1.1（`com.Nanasaki.ftutter`、versionCode 65）専用のMorpheパッチセット。** GPL-3.0。
 
+**開発中・未公開（書き込みフロー段階2〜4）：** リポジトリには、アプリ内Bridgeの認証保護付き`/ext/*`、あいもげPKCE・投稿・presign→PUT、拡張Activityと、あにまんの独自HTMLパーサ／投稿フローの試作が含まれる。**投稿成功・ログイン完了・添付のフィクスチャE2Eは未検証で、実使用・公開を保証しない。** 配布済みv0.2.0 Releaseとは別の開発成果。[実装・検証状況](docs/write-flow-v03-status-20261123.md)。あにまんの仕組みは[あにまん掲示板の公開HTMLとmain.js](https://bbs.animanch.com/main.js)を参考に独自実装し、他パッチのコードを流用していない。
+
 ## v0.2.0 の機能
 
 | パッチ | 既定 | 内容 |

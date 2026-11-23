@@ -25,3 +25,7 @@
 - 添付した `SHA256SUMS` と配布 `.mpp` のSHA-256を照合してください。
 
 本リポジトリはGPL-3.0。Clone appのMorphe公式由来コードに関する著作権表記・ReVanced由来表記・GPL第7条の追加表示は維持しています。
+
+## 今後のリリース手順（Morphe Managerのソース認識）
+
+新バージョンのReleaseを公開する際は、必ずリポジトリ直下の `patches-bundle.json` の `version` と `download_url` を新リリースのバージョンおよび公開 `.mpp` の実URLに更新する。`created_at` はそのReleaseの公開時刻（JST、`YYYY-MM-DDTHH:mm:ss` 形式）を設定し、`description` も変更内容に合わせて更新する。`signature_download_url` は署名ファイルがない場合は空文字列とする。公開後、`patches-list.json` と `patches-bundle.json` の両方がraw URLで取得可能なこと、および `download_url` が実際のReleaseアセットを指すことを確認する。

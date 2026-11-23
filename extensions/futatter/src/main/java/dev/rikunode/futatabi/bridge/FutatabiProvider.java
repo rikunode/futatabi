@@ -42,33 +42,76 @@ public final class FutatabiProvider extends ContentProvider {
         return true;
     }
 
+    private static final String DEFAULTS_MIGRATED = "futatabi.v04.default_boards_done";
+    private static final String AIMOGE = "http://127.0.0.1:18765/aimoge/";
+    private static final String ANIMANCH = "http://127.0.0.1:18765/animanch/";
+    private static final String NEKO = "https://may.2chan.net/27/";
+    private static final String IMG = "https://img.2chan.net/b/";
+    private static final String MAY = "https://may.2chan.net/b/";
+
     private static void registerBoards(Context context) throws Exception {
         SharedPreferences prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE);
+        SharedPreferences migration = context.getSharedPreferences("futatabi_default_migration", Context.MODE_PRIVATE);
         String raw = prefs.getString("flutter.itaList", null);
         JSONArray items;
         if (raw == null) {
-            // The app creates its default board lazily after terms acceptance.
-            // Preserve that stock board even when our provider runs first.
             items = new JSONArray();
-            JSONObject defaultBoard = board("ねこ", "https://may.2chan.net/27/");
-            defaultBoard.put("favorite", true);
-            items.put(defaultBoard.toString());
         } else {
             if (!raw.startsWith(FLUTTER_PREFIX)) return;
             items = new JSONArray(raw.substring(FLUTTER_PREFIX.length()));
         }
+        boolean change = raw == null;
+        // A one-time migration only touches a provably pristine built-in list.
+        // Customized user boards are preserved byte-for-byte as JSON entries.
+        boolean firstPass = !migration.getBoolean(DEFAULTS_MIGRATED, false);
+        if (firstPass) {
+            boolean pristine = true;
+            boolean stockNeko = raw == null;
+            for (int i = 0; i < items.length(); i++) {
+                JSONObject board = new JSONObject(items.getString(i));
+                String url = board.optString("url");
+                if (!NEKO.equals(url) && !IMG.equals(url) && !MAY.equals(url)
+                        && !AIMOGE.equals(url) && !ANIMANCH.equals(url)) {
+                    pristine = false;
+                    break;
+                }
+                if (NEKO.equals(url)) stockNeko = true;
+                if (NEKO.equals(url) && !"\u306d\u3053".equals(board.optString("name"))) {
+                    pristine = false;
+                    break;
+                }
+            }
+            // Never reconstruct an existing user-managed subset of img/may.
+            if (pristine && stockNeko) {
+                JSONArray updated = new JSONArray();
+                boolean img = false, may = false;
+                for (int i = 0; i < items.length(); i++) {
+                    JSONObject board = new JSONObject(items.getString(i));
+                    String url = board.optString("url");
+                    if (NEKO.equals(url)) continue;
+                    if (IMG.equals(url)) img = true;
+                    if (MAY.equals(url)) may = true;
+                    updated.put(items.getString(i));
+                }
+                if (!img) updated.put(board("img", IMG).toString());
+                if (!may) updated.put(board("may", MAY).toString());
+                items = updated;
+                change = true;
+            }
+        }
         boolean aimoge = false, animanch = false;
         for (int i = 0; i < items.length(); i++) {
-            JSONObject item = new JSONObject(items.getString(i));
-            String url = item.optString("url");
-            if ("http://127.0.0.1:18765/aimoge/".equals(url)) aimoge = true;
-            if ("http://127.0.0.1:18765/animanch/".equals(url)) animanch = true;
+            JSONObject board = new JSONObject(items.getString(i));
+            String url = board.optString("url");
+            if (AIMOGE.equals(url)) aimoge = true;
+            if (ANIMANCH.equals(url)) animanch = true;
         }
-        if (aimoge && animanch) return;
-        if (!aimoge) items.put(board("あいもげ", "http://127.0.0.1:18765/aimoge/").toString());
-        if (!animanch) items.put(board("あにまん", "http://127.0.0.1:18765/animanch/").toString());
-        // Commit before Flutter reads the preference. No overwrite when invalid.
-        prefs.edit().putString("flutter.itaList", FLUTTER_PREFIX + items.toString()).commit();
+        if (!aimoge) { items.put(board("\u3042\u3044\u3082\u3052", AIMOGE).toString()); change = true; }
+        if (!animanch) { items.put(board("\u3042\u306b\u307e\u3093", ANIMANCH).toString()); change = true; }
+        if (change && !prefs.edit().putString("flutter.itaList", FLUTTER_PREFIX + items.toString()).commit()) {
+            return; // Retry on the next launch if Flutter persistence failed.
+        }
+        if (firstPass) migration.edit().putBoolean(DEFAULTS_MIGRATED, true).commit();
     }
 
     private static JSONObject board(String name, String url) throws Exception {

@@ -22,7 +22,7 @@ final class BridgeServer {
     private final AimogeAdapter aimoge;
     private final AnimanchAdapter animanch;
     private final ExtensionApi extension;
-    private final ExecutorService workers = Executors.newFixedThreadPool(2);
+    private final ExecutorService workers = Executors.newFixedThreadPool(6);
 
     BridgeServer(Context context) {
         aimoge = new AimogeAdapter(context);

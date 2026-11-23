@@ -9,6 +9,9 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -18,6 +21,8 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.concurrent.Semaphore;
 import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -41,6 +46,14 @@ final class AnimanchAdapter {
     private final SharedPreferences prefs;
     private final Map<String, Cache> cache = new HashMap<>();
     private long lastRequest;
+    private final File thumbnailCache;
+    private final Object[] imageLocks = new Object[32];
+    private final Semaphore imageDownloads = new Semaphore(4);
+    private final Map<String, Cache> thumbnailMemory = new LinkedHashMap<>(32, .75f, true);
+    private long thumbnailBytes;
+    private static final long IMAGE_TTL = 24L * 60 * 60 * 1000;
+    private static final long DISK_IMAGE_LIMIT = 48L * 1024 * 1024;
+    private static final int MEMORY_IMAGE_LIMIT = 10 * 1024 * 1024;
 
     private static class Cache {
         final byte[] bytes; final long expiry;
@@ -49,6 +62,8 @@ final class AnimanchAdapter {
 
     AnimanchAdapter(Context context) {
         prefs = context.getSharedPreferences("futatabi_animanch_private", Context.MODE_PRIVATE);
+        thumbnailCache = new File(context.getCacheDir(), "futatabi_animanch_images");
+        for (int i = 0; i < imageLocks.length; i++) imageLocks[i] = new Object();
     }
 
     BridgeServer.BridgeResponse route(String path) {
@@ -66,7 +81,7 @@ final class AnimanchAdapter {
                 String id = name.substring(0, 13);
                 String source = prefs.getString("image." + id, null);
                 if (source == null) return BridgeServer.BridgeResponse.text(404, "Unknown image");
-                return BridgeServer.BridgeResponse.image(image(source));
+                return BridgeServer.BridgeResponse.image(image(source, path.contains("/thumb/")));
             }
             return BridgeServer.BridgeResponse.text(404, "Unknown route");
         } catch (Exception ex) {
@@ -228,12 +243,20 @@ final class AnimanchAdapter {
         NetworkResponse(int status, byte[] body) { this.status=status; bytes=body; }
     }
 
-    private synchronized NetworkResponse transmit(String method, String url, byte[] body, String type) throws Exception {
+    private NetworkResponse transmit(String method, String url, byte[] body, String type) throws Exception {
         URL target = new URL(url);
         if (!"https".equals(target.getProtocol()) || !"bbs.animanch.com".equals(target.getHost()))
             throw new IllegalArgumentException("Untrusted endpoint");
-        throttle();
-        HttpURLConnection connection = (HttpURLConnection) target.openConnection();
+        boolean imageRequest = "GET".equals(method) &&
+                (target.getPath().contains("/thumb") || target.getPath().matches(".*\\.(png|jpg|jpeg|webp|gif)$"));
+        if (!imageRequest) throttle();
+        if (imageRequest) imageDownloads.acquire();
+        HttpURLConnection connection;
+        try { connection = (HttpURLConnection) target.openConnection(); }
+        catch (Exception ex) {
+            if (imageRequest) imageDownloads.release();
+            throw ex;
+        }
         connection.setInstanceFollowRedirects(false);
         connection.setConnectTimeout(6500);
         connection.setReadTimeout(14000);
@@ -262,7 +285,11 @@ final class AnimanchAdapter {
                 return new NetworkResponse(status, in == null ? new byte[0] :
                         AimogeWriteClient.bounded(in, 1_700_000));
             }
-        } finally { connection.disconnect(); }
+        } finally {
+            // Closing GET response streams permits HttpURLConnection's keep-alive pool to reuse sockets.
+            if (!"GET".equals(method)) connection.disconnect();
+            if (imageRequest) imageDownloads.release();
+        }
     }
 
     private static String boundedError(NetworkResponse response) {
@@ -291,14 +318,85 @@ final class AnimanchAdapter {
         return result.bytes;
     }
 
-    private byte[] image(String source) throws Exception {
+    private byte[] image(String source, boolean thumb) throws Exception {
+        String key = source + (thumb ? ":thumb" : ":full");
+        String fileKey = sha256(key);
+        synchronized (thumbnailMemory) {
+            Cache cached = thumbnailMemory.get(fileKey);
+            if (cached != null && cached.expiry > System.currentTimeMillis()) return cached.bytes;
+        }
+        Object lock = imageLocks[(fileKey.hashCode() & Integer.MAX_VALUE) % imageLocks.length];
+        synchronized (lock) {
+            synchronized (thumbnailMemory) {
+                Cache cached = thumbnailMemory.get(fileKey);
+                if (cached != null && cached.expiry > System.currentTimeMillis()) return cached.bytes;
+            }
+            File disk = new File(thumbnailCache, fileKey + ".jpg");
+            if (disk.isFile() && disk.length() > 0 && disk.length() < 1_200_000 &&
+                    System.currentTimeMillis() - disk.lastModified() < IMAGE_TTL) {
+                try (FileInputStream in = new FileInputStream(disk)) {
+                    byte[] bytes = AimogeWriteClient.bounded(in, 1_200_000);
+                    rememberImage(fileKey, bytes);
+                    return bytes;
+                }
+            }
+            byte[] fresh = encodeImage(source, thumb ? 240 : 960);
+            rememberImage(fileKey, fresh);
+            if (!thumbnailCache.isDirectory()) thumbnailCache.mkdirs();
+            if (thumbnailCache.isDirectory()) {
+                File temp = new File(thumbnailCache, fileKey + ".tmp");
+                try (FileOutputStream out = new FileOutputStream(temp)) { out.write(fresh); }
+                if (disk.exists()) disk.delete();
+                if (!temp.renameTo(disk)) temp.delete();
+                cleanDiskCache();
+            }
+            return fresh;
+        }
+    }
+
+    private static String sha256(String key) throws Exception {
+        byte[] b = MessageDigest.getInstance("SHA-256").digest(key.getBytes(StandardCharsets.UTF_8));
+        StringBuilder out = new StringBuilder(64);
+        for (byte v : b) out.append(String.format(Locale.ROOT, "%02x", v & 255));
+        return out.toString();
+    }
+
+    private void rememberImage(String id, byte[] bytes) {
+        if (bytes.length > MEMORY_IMAGE_LIMIT) return;
+        synchronized (thumbnailMemory) {
+            Cache old = thumbnailMemory.put(id, new Cache(bytes, System.currentTimeMillis() + IMAGE_TTL));
+            if (old != null) thumbnailBytes -= old.bytes.length;
+            thumbnailBytes += bytes.length;
+            java.util.Iterator<Map.Entry<String, Cache>> it = thumbnailMemory.entrySet().iterator();
+            while (thumbnailBytes > MEMORY_IMAGE_LIMIT && it.hasNext()) {
+                thumbnailBytes -= it.next().getValue().bytes.length;
+                it.remove();
+            }
+        }
+    }
+
+    private void cleanDiskCache() {
+        File[] files = thumbnailCache.listFiles((dir, name) -> name.endsWith(".jpg"));
+        if (files == null) return;
+        long sum = 0;
+        for (File file : files) sum += file.length();
+        if (sum <= DISK_IMAGE_LIMIT) return;
+        java.util.Arrays.sort(files, java.util.Comparator.comparingLong(File::lastModified));
+        for (File file : files) {
+            if (sum <= DISK_IMAGE_LIMIT) break;
+            long bytes = file.length();
+            if (file.delete()) sum -= bytes;
+        }
+    }
+
+    private byte[] encodeImage(String source, int maxDimension) throws Exception {
         byte[] body = fetch(source, 600_000L, 5_000_000);
         Bitmap bitmap = BitmapFactory.decodeByteArray(body, 0, body.length);
         if (bitmap == null) throw new IllegalArgumentException("Not an image");
         try {
             int w = bitmap.getWidth(), h = bitmap.getHeight();
-            if (w > 960 || h > 960) {
-                float ratio = Math.min(960f / w, 960f / h);
+            if (w > maxDimension || h > maxDimension) {
+                float ratio = Math.min((float) maxDimension / w, (float) maxDimension / h);
                 Bitmap adjusted = Bitmap.createScaledBitmap(bitmap,
                         Math.max(1, Math.round(w * ratio)), Math.max(1, Math.round(h * ratio)), true);
                 if (adjusted != bitmap) { bitmap.recycle(); bitmap = adjusted; }

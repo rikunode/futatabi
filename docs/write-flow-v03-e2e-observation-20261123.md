@@ -45,3 +45,36 @@ Windowsの `127.0.0.1:18766` で `tests/write_flow_fixture.py` を稼働し、�
 - ポート18766は元の `tests/adb_reverse_fixture.py --port 18766` に復旧。実サービスへの投稿・OAuth認証・実トークン発行は**0件**。
 
 **停止判断**：段階2〜4の実装コードと基本通信経路は存在するが、MUSEの指定した投稿・添付・あにまん3段階の全E2Eには到達していない。リリースせず、未検証部分についてMUSEの次判断を待つ。
+
+
+## 追補：残り3経路と拡張UIのローカルE2E（2026-11-23）
+
+**最新判定：フィクスチャE2Eは全経路PASS。** 上の「PARTIAL」は追補前の検収状態。実サイトでの投稿・OAuth成功を意味しない。
+
+### 安全な実行条件
+
+テスト専用APKでは3つのAPI通信先を127.0.0.1:18766に限定した。tests/write_flow_fixture.pyは外部サービスへ転送しない。エミュレータのクローンアプリUID 10222についてIPv4とIPv6の非ループバック通信をREJECTし、実OAuthと実投稿は行わなかった。
+
+| 検証 | 判定 | フィクスチャで確認した順序・結果 |
+| --- | --- | --- |
+| 模擬PKCE開始、正しいstateのcallback、模擬code交換 | **PASS** | POST /app-authorizations → POST /app-credentials。callback HTTP 200 |
+| 模擬資格情報の保存とログイン状態 | **PASS** | アプリ専用のSharedPreferencesにcredential・有効期限を保持。/ext/status HTTP 200、aimoge=true。FlutterSharedPreferencesに資格情報は含まれない |
+| あいもげ新規スレ | **PASS** | POST /threads/aimg、HTTP 201 |
+| あいもげ返信 | **PASS** | POST /threads/{id}/posts、HTTP 201 |
+| あいもげ画像添付 | **PASS** | POST /attachments/presign → PUT /mock-upload → POST /threads/aimg。実際に生成した有効な4×4 JPEG、632 bytes。HTTP 201 |
+| あにまん3段階 | **PASS** | POST /inc/comment.php?preCheck → POST /inc/comment.php → POST /upload/。HTTP 201、number/thread/jump/attachmentUploadedが返る |
+| 拡張UIからの返信 | **PASS** | スレ一覧から模擬スレを選び、本文入力・送信。フィクスチャにPOST到達。UI階層に「投稿成功」表示 |
+
+最初は前回の期限切れPKCE stateでcallbackが403だった。模擬の認証開始を新規実行しstateを更新するとcallbackが200となった。期限チェックの緩和はしていない。
+
+### 証拠と後片付け
+
+匿名化済みの経路別到達証拠は [write-flow-v03-final-e2e-20261123.json](gate-evidence/write-flow-v03-final-e2e-20261123.json)。フィクスチャ受信ログは17件、SHA-256 96f0d7e3c1293957d4698e7169e2b6409ef0a608d1a6ba584351c66f55aac151。模擬の資格情報や秘密値を含むデータ、生ログ、UI XMLはGit管理外のapk-inspection/v03-fixture-e2e/に保持。
+
+テスト専用 .mpp：739,314 bytes、SHA-256 a35108a284e6070601f1710a007776e579af55f255bb9963dd75bb883ea196e6。
+
+本番ソース復元後のGradle再ビルド：**BUILD SUCCESSFUL**。本番 .mpp：739,379 bytes、SHA-256 45c04d783a7f7861ff2ab51e2f10637d6fb214612f55edd5945659cdbc0c4527。
+
+**両ハッシュは異なる。** 本番Javaソースにテスト用URLの変更差分なし。模擬資格情報と模擬投稿履歴はテスト前のアプリ専用SharedPreferencesへ戻した。UID用のIPv4/IPv6通信遮断・adb forwardを解除し、通常デバッグAPKと元の18766フィクスチャへ復旧。従来のadb reverseは維持。
+
+**MUSE検収境界：すべてのフィクスチャE2EをPASSとする。実サイトでのログイン、投稿、署名付きアップロードURL、あにまんサーバ側検証は別途所有者検収が必要。Release・タグ・バージョン付与なし。**

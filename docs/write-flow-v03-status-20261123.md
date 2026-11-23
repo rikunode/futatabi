@@ -1,3 +1,5 @@
+> **2026-11-23 UPDATE: All local-fixture E2E paths PASS.** PKCE callback/credential exchange, Aimoge thread/reply/presign-PUT, Animanch three-stage posting, and extension-UI reply were verified. Earlier PARTIAL below is historical. See [final E2E results](write-flow-v03-e2e-observation-20261123.md) and [sanitized evidence](gate-evidence/write-flow-v03-final-e2e-20261123.json). No real-service login or posting; no Release.
+
 # futatabi 書き込みフロー v0.3.0（開発中）— 実装・検証状況（2026-11-23）
 
 **判定：段階2〜4の実装・コンパイルは完了。フィクスチャE2Eは一部PASS、投稿・PKCE code交換・添付PUTの成功経路は未検証。MUSEの検収前にReleaseしない。**

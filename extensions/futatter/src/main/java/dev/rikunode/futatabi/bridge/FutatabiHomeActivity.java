@@ -168,12 +168,14 @@ public final class FutatabiHomeActivity extends Activity {
         });
         addText("あいもげ");
         action("新しいスレを立てる", () -> compose(""));
-        action("スレ一覧から返信", this::threadPicker);
+        action("スレ一覧から返信", () -> threadPicker("aimoge"));
         action("ログイン（PKCE）", this::login);
         action("ログアウト", () -> remote("ログアウト", "POST",
                 "/ext/login/aimoge/logout", new JSONObject(), result -> home()));
         action("自分の投稿履歴", this::history);
-        addText("あにまん：読み取り・投稿対応は次の段階で有効化します");
+        addText("あにまん（ログイン画面なし／PHPセッションを保持）");
+        action("あにまん：新規スレ", () -> composeAnimanch(""));
+        action("あにまん：スレ一覧から返信", () -> threadPicker("animanch"));
         addText("めぶき：v0.4.0予定（現在は無効）");
     }
 
@@ -193,20 +195,25 @@ public final class FutatabiHomeActivity extends Activity {
                 });
     }
 
-    private void threadPicker() {
-        startPage("あいもげ • 返信するスレを選ぶ");
+    private void threadPicker(String board) {
+        startPage(("animanch".equals(board) ? "あにまん" : "あいもげ") + " • 返信するスレを選ぶ");
         action("戻る", this::home);
-        remote("スレ一覧を取得", "GET", "/ext/threads?board=aimoge", null, result -> {
+        remote("スレ一覧を取得", "GET", "/ext/threads?board=" + board, null, result -> {
             if (result.status != 200) { updateNotice("取得失敗 HTTP " + result.status); return; }
             updateNotice("返信先を選択");
             try {
                 JSONArray threads = new JSONObject(result.body).getJSONArray("threads");
                 for (int i = 0; i < threads.length(); i++) {
                     JSONObject entry = threads.getJSONObject(i);
-                    String id = UUID.fromString(entry.getString("id")).toString();
+                    String id = entry.getString("id");
+                    if ("aimoge".equals(board)) id = UUID.fromString(id).toString();
+                    else if (!id.matches("[0-9]{13}")) continue;
                     String title = entry.optString("title", "スレ");
                     if (title.length() > 90) title = title.substring(0, 90);
-                    action(title + " (レス " + entry.optInt("replies") + ")", () -> compose(id));
+                    final String selection = id;
+                    action(title + " (レス " + entry.optInt("replies") + ")",
+                            () -> { if ("animanch".equals(board)) composeAnimanch(selection);
+                                else compose(selection); });
                 }
             } catch (Exception ex) { updateNotice("スレ一覧を解析できませんでした"); }
         });
@@ -216,7 +223,7 @@ public final class FutatabiHomeActivity extends Activity {
         threadId = replyTo;
         attached.clear();
         startPage(replyTo.isEmpty() ? "あいもげ • 新規スレ" : "あいもげ • レス投稿");
-        action("戻る", replyTo.isEmpty() ? this::home : this::threadPicker);
+        action("戻る", replyTo.isEmpty() ? this::home : () -> threadPicker("aimoge"));
         addText("本文（最大4,000字）");
         bodyField = input("本文", "", true);
         count = addText("0 / 4000");
@@ -299,6 +306,78 @@ public final class FutatabiHomeActivity extends Activity {
             attached.add(data.getData());
             updateNotice("画像を" + attached.size() + "件選択しました");
         }
+    }
+
+    private void composeAnimanch(String replyTo) {
+        attached.clear();
+        startPage(replyTo.isEmpty() ? "あにまん • 新規スレ" : "あにまん • レス投稿");
+        action("戻る", replyTo.isEmpty() ? this::home : () -> threadPicker("animanch"));
+        final EditText title = replyTo.isEmpty() ? input("スレタイトル", "", false) : null;
+        final EditText category = replyTo.isEmpty() ? input("カテゴリID（掲示板のカテゴリ番号）", "", false) : null;
+        final EditText name = input("名前（省略可）", "", false);
+        final EditText body = input("本文（1,000字まで）", "", true);
+        addText(replyTo.isEmpty() ? "新規スレには画像が必須です。" : "レスは画像なしでも投稿できます。");
+        action("画像を1件選ぶ", () -> {
+            Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            picker.addCategory(Intent.CATEGORY_OPENABLE);
+            picker.setType("image/*");
+            startActivityForResult(picker, CHOOSE_IMAGE);
+        });
+        action("あにまんへ送信", () -> {
+            String text = body.getText().toString();
+            if (text.isEmpty() || text.length() > 1000) {
+                updateNotice("本文は1〜1,000字で入力してください");
+                return;
+            }
+            if (replyTo.isEmpty() &&
+                    (title.getText().length() == 0 || category.getText().length() == 0 || attached.isEmpty())) {
+                updateNotice("新規スレにはタイトル・カテゴリ・画像が必須です");
+                return;
+            }
+            final List<Uri> files = new ArrayList<>(attached);
+            final String textValue = text;
+            final String titleValue = title == null ? "" : title.getText().toString();
+            final String categoryValue = category == null ? "" : category.getText().toString();
+            final String nameValue = name.getText().toString();
+            updateNotice("送信内容を準備中…");
+            io.execute(() -> {
+                try {
+                    JSONObject payload = new JSONObject();
+                    payload.put("threadId", replyTo);
+                    payload.put("title", titleValue);
+                    payload.put("category", categoryValue);
+                    payload.put("name", nameValue);
+                    payload.put("body", textValue);
+                    JSONArray imageArray = new JSONArray();
+                    if (!files.isEmpty()) {
+                        Uri picked = files.get(0);
+                        byte[] bytes;
+                        try (InputStream stream = getContentResolver().openInputStream(picked)) {
+                            if (stream == null) throw new IllegalArgumentException("画像が読めません");
+                            bytes = AimogeWriteClient.bounded(stream, 8_000_000);
+                        }
+                        JSONObject file = new JSONObject();
+                        String type = getContentResolver().getType(picked);
+                        file.put("mime", type == null ? "" : type);
+                        file.put("name", "image.jpg");
+                        file.put("base64", android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP));
+                        imageArray.put(file);
+                    }
+                    if (imageArray.length() > 0) payload.put("attachments", imageArray);
+                    Response result = invoke("POST", "/ext/animanch/post", payload);
+                    runOnUiThread(() -> {
+                        if (isFinishing() || isDestroyed()) return;
+                        if (result.status == 201) {
+                            startPage("あにまん • 投稿完了");
+                            addText(result.body);
+                            action("ホームへ", this::home);
+                        } else updateNotice("投稿失敗 HTTP " + result.status + ": " + result.body);
+                    });
+                } catch (Exception ex) {
+                    runOnUiThread(() -> updateNotice("送信準備失敗: " + ex.getMessage()));
+                }
+            });
+        });
     }
 
     private String randomKey() {

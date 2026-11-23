@@ -19,12 +19,14 @@ final class ExtensionApi {
     private static final String STORE = "futatabi_extension_private";
     private final SharedPreferences prefs;
     private final AimogeAdapter aimoge;
+    private final AnimanchAdapter animanch;
     private final AimogeWriteClient client;
     private final SecureRandom random = new SecureRandom();
 
-    ExtensionApi(Context context, AimogeAdapter adapter) {
+    ExtensionApi(Context context, AimogeAdapter adapter, AnimanchAdapter animanchAdapter) {
         prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE);
         aimoge = adapter;
+        animanch = animanchAdapter;
         client = new AimogeWriteClient();
         synchronized (this) {
             if (!prefs.contains("local_token")) prefs.edit().putString("local_token", randomUrl(32)).commit();
@@ -55,8 +57,11 @@ final class ExtensionApi {
             if ("GET".equals(method) && "/ext/status".equals(path)) return status();
             if ("GET".equals(method) && path.startsWith("/ext/threads?board=")) {
                 String board = query(path).get("board");
-                if (!"aimoge".equals(board)) return BridgeServer.BridgeResponse.text(404, "Unsupported board");
-                return BridgeServer.BridgeResponse.json(200, aimoge.threadsJson().toString());
+                if ("aimoge".equals(board))
+                    return BridgeServer.BridgeResponse.json(200, aimoge.threadsJson().toString());
+                if ("animanch".equals(board))
+                    return BridgeServer.BridgeResponse.json(200, animanch.threadsJson().toString());
+                return BridgeServer.BridgeResponse.text(404, "Unsupported board");
             }
             if ("POST".equals(method) && "/ext/login/aimoge/start".equals(path))
                 return startLogin();
@@ -68,6 +73,11 @@ final class ExtensionApi {
                 if (body.length == 0 || body.length > 28_000_000)
                     return BridgeServer.BridgeResponse.text(413, "Invalid request size");
                 return submit(new JSONObject(new String(body, StandardCharsets.UTF_8)));
+            }
+            if ("POST".equals(method) && "/ext/animanch/post".equals(path)) {
+                if (body.length == 0 || body.length > 14_000_000)
+                    return BridgeServer.BridgeResponse.text(413, "Invalid request size");
+                return animanch.post(new JSONObject(new String(body, StandardCharsets.UTF_8)));
             }
             return BridgeServer.BridgeResponse.text(404, "Not found");
         } catch (IllegalArgumentException ex) {

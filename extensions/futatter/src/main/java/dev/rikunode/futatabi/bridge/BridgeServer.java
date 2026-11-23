@@ -20,12 +20,14 @@ final class BridgeServer {
     private static final String TAG = "FutatabiBridge";
     private static final int PORT = 18765;
     private final AimogeAdapter aimoge;
+    private final AnimanchAdapter animanch;
     private final ExtensionApi extension;
     private final ExecutorService workers = Executors.newFixedThreadPool(2);
 
     BridgeServer(Context context) {
         aimoge = new AimogeAdapter(context);
-        extension = new ExtensionApi(context, aimoge);
+        animanch = new AnimanchAdapter(context);
+        extension = new ExtensionApi(context, aimoge, animanch);
     }
 
     void run() {
@@ -108,7 +110,9 @@ final class BridgeServer {
                 response = BridgeResponse.text(403, "Read only");
             } else if (path.startsWith("/aimoge/")) {
                 response = aimoge.route(path);
-            } else if (path.startsWith("/animanch/") || path.startsWith("/mebuki/")) {
+            } else if (path.startsWith("/animanch/")) {
+                response = animanch.route(path);
+            } else if (path.startsWith("/mebuki/")) {
                 response = BridgeResponse.text(503, "Adapter not enabled");
             } else {
                 response = BridgeResponse.text(404, "Not found");

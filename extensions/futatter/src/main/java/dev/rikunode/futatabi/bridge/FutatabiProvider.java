@@ -57,15 +57,16 @@ public final class FutatabiProvider extends ContentProvider {
             if (!raw.startsWith(FLUTTER_PREFIX)) return;
             items = new JSONArray(raw.substring(FLUTTER_PREFIX.length()));
         }
-        boolean aimoge = false;
+        boolean aimoge = false, animanch = false;
         for (int i = 0; i < items.length(); i++) {
             JSONObject item = new JSONObject(items.getString(i));
             String url = item.optString("url");
             if ("http://127.0.0.1:18765/aimoge/".equals(url)) aimoge = true;
+            if ("http://127.0.0.1:18765/animanch/".equals(url)) animanch = true;
         }
-        if (aimoge) return;
-        // Animanch is intentionally not auto-added until its adapter is verified.
-        items.put(board("あいもげ", "http://127.0.0.1:18765/aimoge/").toString());
+        if (aimoge && animanch) return;
+        if (!aimoge) items.put(board("あいもげ", "http://127.0.0.1:18765/aimoge/").toString());
+        if (!animanch) items.put(board("あにまん", "http://127.0.0.1:18765/animanch/").toString());
         // Commit before Flutter reads the preference. No overwrite when invalid.
         prefs.edit().putString("flutter.itaList", FLUTTER_PREFIX + items.toString()).commit();
     }

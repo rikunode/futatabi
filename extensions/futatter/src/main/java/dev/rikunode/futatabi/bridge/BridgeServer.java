@@ -2,29 +2,30 @@ package dev.rikunode.futatabi.bridge;
 
 import android.content.Context;
 import android.util.Log;
-
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
-/** Read-only local HTTP bridge, scoped to the app process and loopback. */
 final class BridgeServer {
     private static final String TAG = "FutatabiBridge";
     private static final int PORT = 18765;
     private final AimogeAdapter aimoge;
+    private final ExtensionApi extension;
     private final ExecutorService workers = Executors.newFixedThreadPool(2);
 
     BridgeServer(Context context) {
         aimoge = new AimogeAdapter(context);
+        extension = new ExtensionApi(context, aimoge);
     }
 
     void run() {
@@ -35,64 +36,112 @@ final class BridgeServer {
                     Socket client = server.accept();
                     workers.execute(() -> serve(client));
                 } catch (java.net.SocketTimeoutException ignored) {
-                    // Periodically detect interruption without a busy poll.
                 }
             }
         } catch (Exception ex) {
-            // A busy port must not crash or block the host app.
-            Log.w(TAG, "Local port unavailable; disabling bridge: " + ex.getClass().getSimpleName());
+            Log.w(TAG, "Local bridge unavailable: " + ex.getClass().getSimpleName());
         } finally {
             workers.shutdownNow();
         }
     }
 
+    private static String readLine(InputStream in, int limit) throws Exception {
+        ByteArrayOutputStream b = new ByteArrayOutputStream();
+        for (int i = 0; i < limit; i++) {
+            int ch = in.read();
+            if (ch < 0) return null;
+            if (ch == '\n') {
+                byte[] raw = b.toByteArray();
+                int size = raw.length;
+                if (size > 0 && raw[size - 1] == '\r') size--;
+                return new String(raw, 0, size, StandardCharsets.US_ASCII);
+            }
+            b.write(ch);
+        }
+        throw new IllegalArgumentException("Header too long");
+    }
+
     private void serve(Socket socket) {
         try (Socket client = socket) {
-            client.setSoTimeout(10000);
-            BufferedReader request = new BufferedReader(new InputStreamReader(
-                    new BufferedInputStream(client.getInputStream()), StandardCharsets.US_ASCII));
-            String first = request.readLine();
-            if (first == null || first.length() > 2048) return;
-            String[] tokens = first.split(" ");
-            if (tokens.length != 3 || !tokens[2].startsWith("HTTP/1.")) return;
-            String method = tokens[0], path = tokens[1];
-            // Ignore request headers, but consume within limits to prevent slowloris.
-            int headerBytes = 0;
-            for (int i = 0; i < 40; i++) {
-                String line = request.readLine();
-                if (line == null || line.isEmpty()) break;
-                headerBytes += line.length();
-                if (headerBytes > 8192) return;
+            client.setSoTimeout(12000);
+            InputStream input = new BufferedInputStream(client.getInputStream());
+            String first = readLine(input, 2048);
+            if (first == null) return;
+            String[] parts = first.split(" ");
+            if (parts.length != 3 || !parts[2].startsWith("HTTP/1.")) return;
+            String method = parts[0], path = parts[1];
+            if (!path.startsWith("/") || path.length() > 2000) return;
+            Map<String,String> headers = new HashMap<>();
+            int length = 0;
+            for (int i = 0; i < 50; i++) {
+                String line = readLine(input, 8192);
+                if (line == null) return;
+                if (line.isEmpty()) break;
+                length += line.length();
+                if (length > 12000) return;
+                int colon = line.indexOf(':');
+                if (colon > 0) headers.put(line.substring(0, colon).trim().toLowerCase(java.util.Locale.ROOT),
+                        line.substring(colon + 1).trim());
             }
-            OutputStream output = new BufferedOutputStream(client.getOutputStream());
-            if (!"GET".equals(method)) {
-                reply(output, 403, "text/plain; charset=utf-8", "Read only".getBytes(StandardCharsets.UTF_8));
-                return;
+            byte[] body = new byte[0];
+            if ("POST".equals(method)) {
+                String size = headers.get("content-length");
+                int n;
+                try { n = Integer.parseInt(size); }
+                catch (Exception ignored) { n = -1; }
+                if (n < 0 || n > 28_000_000) {
+                    write(client.getOutputStream(), BridgeResponse.text(413, "Invalid request length"));
+                    return;
+                }
+                body = new byte[n];
+                int off = 0;
+                while (off < n) {
+                    int count = input.read(body, off, n - off);
+                    if (count < 0) return;
+                    off += count;
+                }
             }
             BridgeResponse response;
-            if (path.startsWith("/aimoge/")) {
+            if (path.startsWith("/ext/")) {
+                response = extension.route(method, path, headers, body);
+            } else if (!"GET".equals(method)) {
+                response = BridgeResponse.text(403, "Read only");
+            } else if (path.startsWith("/aimoge/")) {
                 response = aimoge.route(path);
             } else if (path.startsWith("/animanch/") || path.startsWith("/mebuki/")) {
                 response = BridgeResponse.text(503, "Adapter not enabled");
             } else {
                 response = BridgeResponse.text(404, "Not found");
             }
-            reply(output, response.status, response.contentType, response.bytes);
+            write(client.getOutputStream(), response);
         } catch (Exception ex) {
-            Log.w(TAG, "Request failed: " + ex.getClass().getSimpleName());
+            Log.w(TAG, "Local request error: " + ex.getClass().getSimpleName());
         }
     }
 
-    private static void reply(OutputStream output, int status, String type, byte[] body) throws Exception {
-        String phrase = status == 200 ? "OK" : status == 403 ? "Forbidden" :
-                status == 404 ? "Not Found" : "Service Unavailable";
-        String headers = "HTTP/1.1 " + status + " " + phrase +
-                "\r\nContent-Type: " + type +
-                "\r\nContent-Length: " + body.length +
+    private static void write(OutputStream raw, BridgeResponse response) throws Exception {
+        BufferedOutputStream output = new BufferedOutputStream(raw);
+        String phrase;
+        switch (response.status) {
+            case 200: phrase = "OK"; break;
+            case 201: phrase = "Created"; break;
+            case 400: phrase = "Bad Request"; break;
+            case 401: phrase = "Unauthorized"; break;
+            case 403: phrase = "Forbidden"; break;
+            case 404: phrase = "Not Found"; break;
+            case 405: phrase = "Method Not Allowed"; break;
+            case 409: phrase = "Conflict"; break;
+            case 413: phrase = "Payload Too Large"; break;
+            case 429: phrase = "Too Many Requests"; break;
+            default: phrase = "Unavailable";
+        }
+        String headers = "HTTP/1.1 " + response.status + " " + phrase +
+                "\r\nContent-Type: " + response.contentType +
+                "\r\nContent-Length: " + response.bytes.length +
                 "\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff" +
                 "\r\nConnection: close\r\n\r\n";
         output.write(headers.getBytes(StandardCharsets.US_ASCII));
-        output.write(body);
+        output.write(response.bytes);
         output.flush();
     }
 
@@ -100,12 +149,16 @@ final class BridgeServer {
         final int status;
         final String contentType;
         final byte[] bytes;
-        BridgeResponse(int status, String contentType, byte[] bytes) {
-            this.status = status; this.contentType = contentType; this.bytes = bytes;
+        BridgeResponse(int status, String type, byte[] bytes) {
+            this.status = status; this.contentType = type; this.bytes = bytes;
         }
         static BridgeResponse text(int status, String message) {
             return new BridgeResponse(status, "text/plain; charset=utf-8",
                     message.getBytes(StandardCharsets.UTF_8));
+        }
+        static BridgeResponse json(int status, String json) {
+            return new BridgeResponse(status, "application/json; charset=utf-8",
+                    json.getBytes(StandardCharsets.UTF_8));
         }
         static BridgeResponse html(byte[] bytes) {
             return new BridgeResponse(200, "text/html; charset=Shift_JIS", bytes);

@@ -75,6 +75,25 @@ final class AimogeAdapter {
         }
     }
 
+    JSONObject threadsJson() throws Exception {
+        ensureClientPolicy();
+        JSONObject upstream = new JSONObject(new String(fetch(API + "/catalog/" + BOARD +
+                "?sort=bump&limit=20&page=1", 90000L, true), StandardCharsets.UTF_8));
+        org.json.JSONArray summaries = new org.json.JSONArray();
+        org.json.JSONArray threads = upstream.getJSONArray("threads");
+        for (int i = 0; i < threads.length(); i++) {
+            JSONObject entry = threads.getJSONObject(i);
+            JSONObject summary = new JSONObject();
+            summary.put("id", entry.getString("id"));
+            summary.put("title", entry.getJSONObject("opPost").optString("body", ""));
+            summary.put("replies", entry.optInt("replyCount", 0));
+            summaries.put(summary);
+        }
+        JSONObject answer = new JSONObject();
+        answer.put("threads", summaries);
+        return answer;
+    }
+
     private byte[] catalog() throws Exception {
         ensureClientPolicy();
         JSONObject result = new JSONObject(new String(fetch(API + "/catalog/" + BOARD +

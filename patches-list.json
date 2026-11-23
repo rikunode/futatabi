@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "patches": [
     {
       "name": "Block banner ads",
@@ -94,7 +94,7 @@
     },
     {
       "name": "Local board bridge",
-      "description": "Auto-register local boards and start a read-only in-process loopback server.",
+      "description": "Auto-register boards and run the local bridge with protected posting UI for Aimoge and Animanch.",
       "default": true,
       "category": null,
       "compatiblePackages": [

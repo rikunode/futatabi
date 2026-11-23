@@ -60,7 +60,7 @@ private val bridgeManifestPatch = resourcePatch {
 @Suppress("unused")
 val bridgePatch = bytecodePatch(
     name = "Local board bridge",
-    description = "Auto-register local boards and start a read-only in-process loopback server.",
+    description = "Auto-register boards and run the local bridge with protected posting UI for Aimoge and Animanch.",
     default = true,
 ) {
     compatibleWith(

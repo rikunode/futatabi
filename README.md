@@ -2,9 +2,16 @@
 
 **ふたったー 3.1.1（`com.Nanasaki.ftutter`、versionCode 65）専用のMorpheパッチセット。** GPL-3.0。
 
-**開発中・未公開（書き込みフロー段階2〜4）：** リポジトリには、アプリ内Bridgeの認証保護付き`/ext/*`、あいもげPKCE・投稿・presign→PUT、拡張Activityと、あにまんの独自HTMLパーサ／投稿フローの試作が含まれる。**投稿成功・ログイン完了・添付のフィクスチャE2Eは未検証で、実使用・公開を保証しない。** 配布済みv0.2.0 Releaseとは別の開発成果。[実装・検証状況](docs/write-flow-v03-status-20261123.md)。あにまんの仕組みは[あにまん掲示板の公開HTMLとmain.js](https://bbs.animanch.com/main.js)を参考に独自実装し、他パッチのコードを流用していない。
+**v0.3.0：書き込み機能を追加。** あいもげのPKCEログイン／新規スレ／返信／画像添付／削除キー管理、あにまんの読み取りと3段階投稿、ランチャーから起動する拡張ホーム画面に対応。**投稿・ログイン・画像送信はローカルフィクスチャE2Eで検証済み。実機・実サイトでの最終確認は未実施。** [実測報告](docs/write-flow-v03-e2e-observation-20261123.md)。めぶきは未対応（v0.4.0予定）。あにまんは[公開HTMLとmain.js](https://bbs.animanch.com/main.js)を参考に独自実装し、他パッチのコードは流用していない。
 
-## v0.2.0 の機能
+## v0.3.0 の追加機能
+
+- あいもげ：拡張ホーム画面からPKCEログイン、新規スレ立て、返信、画像添付（presign→PUT）、削除キーと投稿履歴を管理
+- あにまん：カタログ・スレの読み取りアダプタと、preCheck→comment.php→upload/の書き込み対応
+- 拡張ホーム画面：独立したランチャーアイコンから起動し、板ごとの投稿とログイン導線を提供
+- めぶき：未対応。v0.4.0での対応を予定
+
+## v0.2.0 から継続する機能
 
 | パッチ | 既定 | 内容 |
 | --- | --- | --- |
@@ -27,7 +34,7 @@
 ## 導入
 
 1. **ふたったー3.1.1** のスプリットXAPKを、すべての必要なスプリットを含む単一APKへマージする（分割されたベースAPKだけでは起動できない）。
-2. [Releases](https://github.com/rikunode/futatabi/releases) から `futatabi-patches-v0.2.0.mpp` と `SHA256SUMS` を取得し、ハッシュを照合。
+2. [Releases](https://github.com/rikunode/futatabi/releases) から `futatabi-patches-v0.3.0.mpp` と `SHA256SUMS` を取得し、ハッシュを照合。
 3. Morphe Managerへfutatabiのパッチソースを追加し、マージ済みAPKへ適用。パッチ3件はすべて既定ON。適用後のAPKは自分の端末用に署名・インストールする。
 4. ふたったーを起動し、利用規約に同意後、板一覧の「あいもげ」を開く。
 

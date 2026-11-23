@@ -22,6 +22,12 @@
 
 実際の `authorizationUrl`、`id`、一時的なPKCE検証値や状態値は記録・公開しない。**201はredirectUriが承認要求の作成段階で受理されたことだけを示す**。ブラウザからループバックへ戻れるか、コールバックをBridgeが受けられるか、code交換が成功するかは未検証。別方式への切り替えは不要だが、フロー全体の成功を意味しない。
 
+## MUSE検収に基づく訂正・補足（2026-11-23）
+
+MUSEも実APIで `X-Board-Key: aimg` とOpenAPIに適合するPKCE各項目を指定し、同じloopback `redirectUri` の `POST /app-authorizations` に対して **HTTP 201** と `authorizationUrl` を確認した。僕の先行試行も201であり、報告上「僕の401」とする記述は実測記録と一致しない。201が示すのは承認要求作成時の受付のみで、承認・code交換は未実施。
+
+MUSE確認のpresign契約は、**リクエスト必須 `sha256`（小文字hex）・`mime`・`sizeBytes`、任意 `fileName`**、必須ヘッダー `x-aimg-token`・`X-Board-Key`。**レスポンス `attachmentId`・`uploadUrl`（presigned PUT URL、重複時null）・`reused`**。アップロードは返却URLへの **PUT**。`filename` / `contentType` / `size` や `uploadMethod` / `uploadHeaders` / `expiresAt` を本APIのフィールドと扱わない（本ファイルの初回報告にもこれらの誤フィールドは書かれていない）。認証済み実呼出しは未実施、要本人資格情報。
+
 ## presignの仕様確認
 
 参照：`https://api.nijiurachan.net/openapi.json`（`info.version=2026-11-11`）、`POST /attachments/presign`。

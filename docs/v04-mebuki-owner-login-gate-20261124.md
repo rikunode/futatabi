@@ -206,3 +206,19 @@ Android Javaコンパイル、診断出力の秘匿化・通常無効13チェッ
 - [総合証拠JSON](gate-evidence/v04-mebuki-x-diagnostic-result-20261125.json)
 
 バージョン0.3.0維持。`patches-list.json`変更なし。Releaseなし。
+
+## 10. 通常APKでのX入口再確認（2026-11-25 07:34–07:45 JST）
+
+### 結果：X入口未到達
+
+- 端末の通常APKは `pre-diagnostic-installed-clone.apk` とSHA-256完全一致（`b3580fedca0cdd291fa9575516d9552a873778dd1b8d4a5baef775d858e2dbb6`）。versionCode 65 / versionName 3.1.1。診断APKではない。
+- 初回の `MebukiLoginActivity` 起動時にAndroidのANRダイアログ（「ふたったー isn't responding」）が表示された。「Wait」を一度選んでも解消しなかった。既知の復旧手順に従いアプリ再起動を一度だけ行い、ホーム画面と公式めぶきページの表示まで回復した。
+- 公式ページをログインボタンまでスクロールし、Xボタンを一度だけ押下。8秒後もめぶき公式トップページに留まり、XのAuthorize画面へ遷移しなかった。証拠スクリーンショットではX／Google／Discordのボタンが引き続き表示されている。追加タップ・再試行はしていない。
+- 資格情報入力・実ログイン・承認・実投稿はなし。Google／Discordには触れていない。UA変更・ソース変更なし。
+- 診断ビルドでは資格情報入力画面まで到達した一方、通常ビルドでは今回到達しなかった。この差は観測事実として記録し、原因は未確定のまま維持する。アプリ側の修正やプロバイダー側の制限とは断定しない。
+- 試験後はBackで `FutatabiHomeActivity` に戻り、アプリをforce-stop。端末上の通常APKハッシュは一致を維持。最終reverseは既存の `tcp:18766` のみで、18769／18770の待受なし。専有ボードのstatus FREEは§9のMUSE確認記録を参照。
+- HTTPエラー表示は§9の安全性チェック拒否により未確認のまま。fixtureの標準出力に汎用のリクエスト受信行はあるが、WebView起因と確認できるイベント・画面証拠はなく、表示PASSとは扱わない。追加試行なし。
+
+証拠：[通常APK X入口後の画面](gate-evidence/v04-mebuki-x-normal-entry-20261125.jpg)、[通常APK X入口試験JSON](gate-evidence/v04-mebuki-x-normal-entry-20261125.json)。
+
+バージョン0.3.0維持。`patches-list.json`変更なし。Releaseなし。

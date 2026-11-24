@@ -1,0 +1,23 @@
+11-24 22:16:10.902 23921 23921 I FutatabiMebukiDiag: X_ENTRY_BEGIN
+11-24 22:16:11.098 23685 23685 I FutatabiMebukiDiag: n=15 ms=196662 snapshot_before_touch provider=SITE host=mebuki.moe route=root loading_progress=100
+11-24 22:16:11.284 23685 23685 I FutatabiMebukiDiag: n=16 ms=196848 dom_before_touch provider=SITE host=mebuki.moe route=root login_prompt=false credential_field=false challenge=false explicit_error=false blank_target=true
+11-24 22:16:12.274 23685 23685 I FutatabiMebukiDiag: n=17 ms=197838 navigation_request provider=X host=x.com route=authorize redirect=false gesture=true
+11-24 22:16:12.395 23685 23685 I FutatabiMebukiDiag: n=18 ms=197959 snapshot_after_touch_1s provider=SITE host=mebuki.moe route=root loading_progress=10
+11-24 22:16:12.628 23685 23685 I FutatabiMebukiDiag: n=19 ms=198192 dom_after_touch_1s provider=SITE host=mebuki.moe route=root login_prompt=false credential_field=false challenge=false explicit_error=false blank_target=true
+11-24 22:16:13.314 23685 23685 I FutatabiMebukiDiag: n=20 ms=198879 page_started provider=X host=x.com route=authorize
+11-24 22:16:15.440 23685 23685 I FutatabiMebukiDiag: n=21 ms=201004 snapshot_after_touch_4s provider=X host=x.com route=authorize loading_progress=0
+11-24 22:16:15.507 23685 23685 I FutatabiMebukiDiag: n=22 ms=201071 dom_after_touch_4s provider=X host=x.com route=authorize login_prompt=true credential_field=false challenge=false explicit_error=false blank_target=false
+11-24 22:16:16.227 23685 23685 I FutatabiMebukiDiag: n=23 ms=201791 snapshot_page_finished provider=X host=x.com route=authorize loading_progress=78
+11-24 22:16:16.375 23685 23685 I FutatabiMebukiDiag: n=24 ms=201939 dom_page_finished provider=X host=x.com route=authorize login_prompt=true credential_field=false challenge=false explicit_error=false blank_target=false
+11-24 22:16:16.375 23685 23685 I FutatabiMebukiDiag: n=25 ms=201939 snapshot_page_finished provider=X host=x.com route=authorize loading_progress=100
+11-24 22:16:16.462 23685 23685 I FutatabiMebukiDiag: n=26 ms=202026 dom_page_finished provider=X host=x.com route=authorize login_prompt=true credential_field=false challenge=false explicit_error=false blank_target=false
+11-24 22:16:18.244 23685 23685 I FutatabiMebukiDiag: n=27 ms=203809 console route=other level=WARNING category=other line=2
+11-24 22:16:18.746 23685 23685 I FutatabiMebukiDiag: n=28 ms=204310 console route=other level=TIP category=other line=3
+11-24 22:16:20.092 23685 23685 I FutatabiMebukiDiag: n=29 ms=205657 console route=other level=TIP category=other line=3
+11-24 22:16:58.560 24007 24007 I FutatabiMebukiDiag: X_LOGIN_CONTINUE_BEGIN
+11-24 22:16:58.633 23685 23685 I FutatabiMebukiDiag: n=30 ms=244198 snapshot_before_touch provider=X host=x.com route=authorize loading_progress=100
+11-24 22:16:58.685 23685 23685 I FutatabiMebukiDiag: n=31 ms=244249 dom_before_touch provider=X host=x.com route=authorize login_prompt=true credential_field=false challenge=false explicit_error=false blank_target=false
+11-24 22:16:59.845 23685 23685 I FutatabiMebukiDiag: n=32 ms=245409 snapshot_after_touch_1s provider=X host=x.com route=other loading_progress=100
+11-24 22:17:00.027 23685 23685 I FutatabiMebukiDiag: n=33 ms=245591 dom_after_touch_1s provider=X host=x.com route=other login_prompt=false credential_field=false challenge=false explicit_error=false blank_target=false
+11-24 22:17:02.645 23685 23685 I FutatabiMebukiDiag: n=34 ms=248209 snapshot_after_touch_4s provider=X host=x.com route=other loading_progress=100
+11-24 22:17:02.663 23685 23685 I FutatabiMebukiDiag: n=35 ms=248227 dom_after_touch_4s provider=X host=x.com route=other login_prompt=false credential_field=true challenge=false explicit_error=false blank_target=true

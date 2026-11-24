@@ -168,6 +168,41 @@ Android Javaコンパイル、診断出力の秘匿化・通常無効13チェッ
 - 診断APK：apk-inspection/v04-x-diagnostic/x-diagnostic-signed.apk（69610206 bytes、SHA-256 9f6f36bdf40bfb4a2f7149ea2c37c155a0af669b4c1f9487df1a26284cd4832a）
 - 通常MPP：753416 bytes、SHA-256 990399fb2a476d3bd745e8675e9d22ad80077e0ba55222c0a759c2f4f0d6c9de。通常ソース・ビルドに復元済み。内部バージョン0.3.0維持。
 
-専有復帰の明示合図を受領後、現行端末状態を保全し、診断APKを適用。専用タグだけを取得し、X公式ボタン→Authorize app→Log inを一度だけ操作する。入力欄到達・警告・画面変化・計測結果を確認し、資格情報は入力しない。アプリ側実装不足の証拠が得られれば最小修正、プロバイダー側保護による拒否が確認できれば追跡終了。原因不明なら不明と記録し、勝手に再試行しない。診断APKは本人認証には使用せず、終了後は通常APKへ復旧する。HTTPエラー表示の単独試行は別に実施する。共有エミュレータはHoshiori側へ解放中で、復帰合図まで一切操作しない。
+専有復帰後の実施結果は§9に記録する。診断APKは本人認証には使用せず、終了後に試験前の通常APKへ復旧する。HTTPエラー表示の単独試行はX入口試験とは別に扱う。
 
 証拠：[v04-mebuki-x-diagnostic-preparation-20261124.json](gate-evidence/v04-mebuki-x-diagnostic-preparation-20261124.json)。バージョン更新・Releaseなし。
+
+## 9. 専有復帰後のX計測再現・HTTPエラー試験（2026-11-25）
+
+### X入口：資格情報入力画面までPASS
+
+所有者の専有合図とボードCLAIMEDを確認し、emulator-5554だけを操作。診断APKは適用直前にSHA-256 `9f6f36bdf40bfb4a2f7149ea2c37c155a0af669b4c1f9487df1a26284cd4832a`（69,610,206 bytes）を照合してから `adb install -r`。対象はクローン `com.Nanasaki.ftutter.morphe`、versionCode 65 / versionName 3.1.1。署名証明書SHA-256は既存インストールと一致。
+
+1. めぶき公式ホームのログイン導線までスクロールし、公式Xボタンを一度押下。
+2. `x.com` のAuthorize画面へ遷移。画面に `Authorize app / X`、`Log in to X to continue.` を確認。
+3. `Log in` を一度押下。
+4. `Email or username`、`Continue with phone`、`Continue with Apple`、`Continue` を含むXの資格情報入力画面を確認。
+
+診断ログでは、Xへのmain-frame navigation requestが `provider=X host=x.com route=authorize redirect=false gesture=true`。Authorize画面は読み込み完了（progress 100）、login_prompt=true、credential_field=false。Log in押下後のSPA状態はroute category `other`、credential_field=true、challenge=false、explicit_error=false。警告・チャレンジ・明示エラーは観測しなかった。`onCreateWindow` コールバック記録はないが、既存設定 `multiple_windows=false` / `js_auto_windows=false` のままであるため、コールバック不在だけでポップアップ要求不存在とは断定しない。SPA遷移後の任意パス・クエリは秘匿方針により記録していない。完全なHTTP redirect chainも未捕捉。
+
+前回の入力欄未到達は今回の一回の計測再現では再現しなかった。よって原因は未確定のままとし、アプリ側修正もプロバイダー制限の断定も行わない。資格情報入力・承認・実ログインは一切行っていない。追加タップや再試行なし。
+
+### HTTPエラー表示：未確認のまま停止
+
+`127.0.0.1:18770/http-error` が503を返すテスト専用MPP/APKを生成したが、fixture server起動要求が `REQUEST_UNRESOLVED` で二度拒否された。監督指示に従い、追加の起動試行やWebView画面の再現は行わず停止。テスト専用APKは端末へインストールしていない。したがって `onReceivedHttpError` の実機UI表示は未確認であり、PASS扱いしない。テストビルドはローカル専用URLを含む一時成果物で、本番ソースには残していない。
+
+### 通常APK復旧・端末解放
+
+試験前に端末から取得して保全した通常クローンAPK（69,606,110 bytes、SHA-256 `b3580fedca0cdd291fa9575516d9552a873778dd1b8d4a5baef775d858e2dbb6`）を `adb install -r` で復元。復元後に端末から再取得したbase.apkのSHA-256も完全一致。versionCode 65 / versionName 3.1.1、firstInstallTimeは維持。アプリはforce-stop状態。
+
+試験用reverse 18769/18770を除去し、待受プロセスを停止。最終reverse一覧は既存の `tcp:18766` のみ、18769/18770の待受なし。元の18766 reverseは保持。資格情報・アプリデータを消すアンインストールは行っていない。
+
+専有ボード正本 `~/workspace/emulator-5554-claim.md` はMUSE VM側にあり、Windows/WSL側からは参照できなかった。MUSEへ解放結果を報告し、MUSE自身がstatusをFREEへ更新したとの返信を受領。したがって共有エミュレータは解放済み。
+
+証拠：
+- [計測ログ](gate-evidence/v04-mebuki-x-diagnostic-20261125.log)
+- [Xログイン画面のUI階層](gate-evidence/v04-mebuki-x-login-ui-20261125.xml)
+- [Xログイン画面スクリーンショット](gate-evidence/v04-mebuki-x-login-screen-20261125.jpg)
+- [総合証拠JSON](gate-evidence/v04-mebuki-x-diagnostic-result-20261125.json)
+
+バージョン0.3.0維持。`patches-list.json`変更なし。Releaseなし。

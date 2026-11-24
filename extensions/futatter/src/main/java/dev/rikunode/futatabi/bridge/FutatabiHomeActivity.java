@@ -163,8 +163,9 @@ public final class FutatabiHomeActivity extends Activity {
                 return;
             }
             try {
-                boolean loggedIn = new JSONObject(result.body).optBoolean("aimoge");
-                updateNotice("あいもげ：" + (loggedIn ? "ログイン中" : "未ログイン"));
+                JSONObject state = new JSONObject(result.body);
+                boolean loggedIn = state.optBoolean("aimoge");
+                updateNotice("あいもげ：" + (loggedIn ? "ログイン中" : "未ログイン") + "\nめぶき：" + state.optString("mebukiSessionState", "UNVERIFIED"));
             } catch (Exception ex) { updateNotice("状態を確認できませんでした"); }
         });
         addText("あいもげ");

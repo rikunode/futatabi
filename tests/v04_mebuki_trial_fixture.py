@@ -15,6 +15,15 @@ class Handler(BaseHTTPRequestHandler):
             cookie = self.headers.get("Cookie", "")
             body = (b'{"user":{"id":"fake"},"session":{"id":"fake"}}' if "mock_session=offline-test" in cookie else b'null')
             mimetype = "application/json"
+        elif self.path in ("/api/catalog", "/api/thread/LOCALdemoA0/messages"):
+            if "mock_session=offline-test" not in self.headers.get("Cookie", ""):
+                self.send_response(302)
+                self.send_header("Location", "/")
+                self.end_headers()
+                return
+            # Synthetic examples for shape capture only, not asserted as the real contract.
+            body = json.dumps({"fixtureOnly": True, "items": [{"id": "fake", "content": "synthetic"}]}).encode()
+            mimetype = "application/json"
         elif self.path == "/api/trial/trending":
             body = json.dumps({"threads": [
                 {"slug": "LOCALdemoA0", "name": "テスト用スレA", "messageCount": 12,

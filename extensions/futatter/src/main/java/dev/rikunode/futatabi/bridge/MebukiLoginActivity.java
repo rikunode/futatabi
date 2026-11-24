@@ -1,7 +1,6 @@
 package dev.rikunode.futatabi.bridge;
 
 import android.app.Activity;
-import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
@@ -12,13 +11,10 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import org.json.JSONObject;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 
 /**
  * Owner-operated Mebuki login WebView. No real login is executed automatically.
@@ -55,6 +51,15 @@ public final class MebukiLoginActivity extends Activity {
         });
         layout.addView(erase);
 
+        EditText slug = new EditText(this);
+        slug.setSingleLine(true);
+        slug.setHint("スレURLの /t/ 以下のID（任意）");
+        layout.addView(slug);
+        Button inspect = new Button(this);
+        inspect.setText("保存済み認証で読取契約を確認（値は記録しない）");
+        inspect.setOnClickListener(view -> inspectContract(slug.getText().toString().trim()));
+        layout.addView(inspect);
+
         browser = new WebView(this);
         WebSettings settings = browser.getSettings();
         settings.setJavaScriptEnabled(true); // The official Better Auth interface requires JS.
@@ -82,52 +87,65 @@ public final class MebukiLoginActivity extends Activity {
         String current = browser.getUrl();
         Uri uri = current == null ? null : Uri.parse(current);
         if (uri == null || !"https".equals(uri.getScheme()) || !"mebuki.moe".equals(uri.getHost())) {
-            status.setText("めぶき公式ドメイン内で確認してください。");
+            status.setText("めぶき公式サイトに戻ってから確認してください。");
             return;
         }
         String cookies = CookieManager.getInstance().getCookie(SITE);
-        if (cookies == null || cookies.isEmpty() || cookies.length() > 8192) {
-            status.setText("Cookie???????????????????");
+        if (!MebukiSession.safeCookie(cookies)) {
+            status.setText("有効なCookieがありません。本人ログインが必要です。");
             return;
         }
-        status.setText("??????????????????");
+        status.setText("セッションを検証中…");
         new Thread(() -> {
-            boolean confirmed = false;
-            try {
-                URL endpoint = new URL(SITE + "/api/auth/get-session");
-                HttpURLConnection connection = (HttpURLConnection) endpoint.openConnection();
-                connection.setInstanceFollowRedirects(false);
-                connection.setConnectTimeout(7000);
-                connection.setReadTimeout(8000);
-                connection.setRequestProperty("Accept", "application/json");
-                connection.setRequestProperty("Cookie", cookies);
-                try {
-                    if (connection.getResponseCode() == 200) {
-                        try (InputStream in = connection.getInputStream()) {
-                            byte[] response = AimogeWriteClient.bounded(in, 24576);
-                            JSONObject session = new JSONObject(new String(response, StandardCharsets.UTF_8));
-                            confirmed = session.optJSONObject("user") != null &&
-                                    session.optJSONObject("session") != null;
-                        }
-                    }
-                } finally { connection.disconnect(); }
-            } catch (Exception ignored) {
-                // Never log response bodies, cookies, user identifiers or OAuth state.
+            MebukiSession.State state = MebukiSession.verify(cookies);
+            boolean saved = false;
+            if (state == MebukiSession.State.AUTHENTICATED) {
+                CookieManager.getInstance().flush();
+                saved = getSharedPreferences(PREF, MODE_PRIVATE).edit()
+                        .putString(MebukiSession.KEY, cookies).commit();
             }
-            final boolean validSession = confirmed;
+            final boolean persisted = saved;
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed()) return;
-                if (!validSession) {
-                    status.setText("????????????????????????????");
-                    return;
-                }
-                boolean saved = getSharedPreferences(PREF, MODE_PRIVATE).edit()
-                        .putString("mebuki_cookie_header", cookies).commit();
-                status.setText(saved
-                        ? "?????????????????????Cookie????????????"
-                        : "???????????????????");
+                status.setText(persisted ? "認証済みセッションを端末内に保存しました。" :
+                        "保存未完了：" + state.name());
             });
         }, "futatabi-mebuki-session-check").start();
+    }
+
+    private void inspectContract(String slug) {
+        if (!slug.isEmpty() && !slug.matches("[A-Za-z0-9_-]{8,24}")) {
+            status.setText("スレIDの形式が不正です。");
+            return;
+        }
+        final String cookie = MebukiSession.saved(this);
+        final org.json.JSONArray names = MebukiSession.cookieNames(CookieManager.getInstance().getCookie(SITE));
+        status.setText("読取契約を確認中…");
+        new Thread(() -> {
+            String result;
+            try {
+                if (MebukiSession.verify(cookie) != MebukiSession.State.AUTHENTICATED) {
+                    JSONObject meta = new JSONObject();
+                    meta.put("firstPartyCookieNames", names);
+                    meta.put("session", "UNVERIFIED_OR_NOT_SAVED");
+                    result = meta.toString(2);
+                } else {
+                    JSONObject meta = new JSONObject();
+                    meta.put("firstPartyCookieNames", names);
+                    meta.put("session", MebukiSession.inspectRead("/api/auth/get-session", cookie));
+                    meta.put("catalog", MebukiSession.inspectRead("/api/catalog", cookie));
+                    if (!slug.isEmpty()) meta.put("messages", MebukiSession.inspectRead("/api/thread/" + slug + "/messages", cookie));
+                    result = meta.toString(2);
+                }
+            } catch (Exception ex) { result = "契約取得失敗：" + ex.getClass().getSimpleName(); }
+            final String report = result;
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                status.setText("読取契約確認終了。");
+                new android.app.AlertDialog.Builder(this).setTitle("値を含まない契約情報")
+                        .setMessage(report).setPositiveButton("OK", null).show();
+            });
+        }, "futatabi-mebuki-contract-inspect").start();
     }
 
     @Override protected void onDestroy() {

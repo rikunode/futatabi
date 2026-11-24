@@ -15,7 +15,7 @@
 
 | パッチ | 既定 | 内容 |
 | --- | --- | --- |
-| Block banner ads | ON | `loadBannerAd`／`loadAdManagerBannerAd` のみを無効化。リワード広告の呼び出し先には手を加えない |
+| Block banner ads | ON | マージ済み ARM64 APK の `libapp.so` を照合し、上部バナーとその余白を除去。リワード広告の経路には手を加えない |
 | Clone app | ON | 既定ではパッケージ名に `.morphe` を追加し、元アプリと共存可能にする |
 | Local board bridge | ON | アプリ内ContentProviderから読み取り専用HTTPサーバーを起動し、**あいもげ**を既存の板一覧に自動追加 |
 

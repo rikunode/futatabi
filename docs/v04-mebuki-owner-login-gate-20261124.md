@@ -145,4 +145,29 @@ e5730b0dベースの通常MPP（前回記録のSHA一致）からAPKを生成・
 
 通常APKを再インストールし端末上のSHA-256一致を確認。アプリ専用SharedPreferencesは試験前とSHA一致で復元。18768番フィクスチャ、追加したforward/reverse、IPv4/IPv6遮断を撤去し、既存18766 reverseは維持。通常HTTPSソースからGradle再ビルドPASS。ループバックのWebView内合成Cookieの消去は未確認だが、保存されたアプリ専用セッションは復元済みで、合成Cookieはループバック用。アプリは停止状態。バージョン・公開メタデータ・Releaseは変更しない。
 
-**次のゲート**：XのLog inで遷移しない原因の正規導線での切り分け、未捕捉HTTPリダイレクト列、現行APKでのDiscord合成E2Eとエラー表示。Discordの本人認証入口は到達済み。実認証済みCookie・応答契約・実サイト投稿は未検証。詳細は [v04-mebuki-two-provider-live-20261124.json](gate-evidence/v04-mebuki-two-provider-live-20261124.json)。
+**当時の残件**：XのLog inで遷移しない原因、未捕捉HTTPリダイレクト列、Discord合成E2Eとエラー表示。Discordの本人認証入口は到達済み。実認証済みCookie・応答契約・実サイト投稿は未検証。詳細は [v04-mebuki-two-provider-live-20261124.json](gate-evidence/v04-mebuki-two-provider-live-20261124.json)。
+
+## 8. MUSE検収判断とX診断準備
+
+MUSEは48e0b718のPARTIAL記録を検収。Discordの現行APK合成E2Eについては、同一のプロバイダー非依存処理でX合成セッションの全周期PASSと前段の両種ホストフィクスチャPASSを根拠に、**監督判断による等価カバー済み**とする。Discord現行APKでの実測をPASSへ書き換えず、追加再試験もしない。HTTPエラー表示は専有復帰後に独立した一試行だけ実施し、ツール安全性チェックに再度阻まれれば未確認のまま本人関門へ渡す。
+
+Xは通常のタップを繰り返さず、専有復帰後に計測付きの入口再現を一回だけ行う。MebukiLoginDiagnosticsを追加し、通常ビルドではENABLED=false。診断専用ビルドのみtrueにして生成した。端末操作は今回ゼロ。
+
+### 計測内容と限界
+
+- 専用タグ FutatabiMebukiDiag に時系列番号・経過時間、認識済みホスト・固定経路分類、メインフレーム遷移要求のredirect/gesture、page start、page finish、通信/HTTP/TLSエラーを記録。
+- onCreateWindowの要求有無・dialog/gesture、既存のmultiple_windows/js_auto_windows設定を記録。設定は変更せず、superの処理を維持する。multiple windowsが無効な場合など、コールバックが来ないことはポップアップ要求不存在の証明にならない。
+- JSコンソールはレベル・行番号と固定分類（window/challenge/csp/cross_origin/cookie/network/js_error/blocked/other）のみ。生文言は保存しない。タッチ前・終了1秒後/4秒後およびページ終了時に、ログイン文言、入力欄存在、チャレンジ、明示的エラー、target=_blankリンク等の有無をbooleanで取得。DOM指標はヒューリスティックで、陰性でもチャレンジ不在を保証しない。
+- URLのクエリ/fragment/任意のパス・未知のサブドメイン・Cookie値・認証情報・ページ本文・入力値を記録しない。全160イベント、コンソール32イベントまで。フルHTTPリダイレクト列を保証する計測ではない。UA変更、新規ウィンドウ許可、プロバイダー制限変更なし。
+
+### 準備済み成果物と再現手順
+
+Android Javaコンパイル、診断出力の秘匿化・通常無効13チェック、既存遷移分類13ケース、診断/通常Gradleビルド、診断APKの生成・署名検証がPASS。初回ホスト試験の不正な合成ホスト名は修正し、当該試験のみ再実行PASS。APK署名検証ではMETA-INFの保護対象外エントリに関する警告あり。端末での計測動作はまだ未検証。
+
+- 診断MPP：apk-inspection/v04-x-diagnostic/x-diagnostic.mpp（754712 bytes、SHA-256 be307d79d88a80e6de0c45aa0553dc9bb087bfc09510b97cba7cd82a347fedf8）
+- 診断APK：apk-inspection/v04-x-diagnostic/x-diagnostic-signed.apk（69610206 bytes、SHA-256 9f6f36bdf40bfb4a2f7149ea2c37c155a0af669b4c1f9487df1a26284cd4832a）
+- 通常MPP：753416 bytes、SHA-256 990399fb2a476d3bd745e8675e9d22ad80077e0ba55222c0a759c2f4f0d6c9de。通常ソース・ビルドに復元済み。内部バージョン0.3.0維持。
+
+専有復帰の明示合図を受領後、現行端末状態を保全し、診断APKを適用。専用タグだけを取得し、X公式ボタン→Authorize app→Log inを一度だけ操作する。入力欄到達・警告・画面変化・計測結果を確認し、資格情報は入力しない。アプリ側実装不足の証拠が得られれば最小修正、プロバイダー側保護による拒否が確認できれば追跡終了。原因不明なら不明と記録し、勝手に再試行しない。診断APKは本人認証には使用せず、終了後は通常APKへ復旧する。HTTPエラー表示の単独試行は別に実施する。共有エミュレータはHoshiori側へ解放中で、復帰合図まで一切操作しない。
+
+証拠：[v04-mebuki-x-diagnostic-preparation-20261124.json](gate-evidence/v04-mebuki-x-diagnostic-preparation-20261124.json)。バージョン更新・Releaseなし。

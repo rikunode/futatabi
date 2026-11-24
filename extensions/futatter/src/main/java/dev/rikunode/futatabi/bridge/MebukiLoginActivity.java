@@ -28,6 +28,7 @@ public final class MebukiLoginActivity extends Activity {
     private TextView status, navigation;
     private Button check, erase, inspect, cancel;
     private boolean busy, pageFailed;
+    private MebukiLoginDiagnostics diagnostics;
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
@@ -82,11 +83,38 @@ public final class MebukiLoginActivity extends Activity {
         settings.setAllowContentAccess(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         CookieManager.getInstance().setAcceptCookie(true);
-        browser.setWebChromeClient(new WebChromeClient());
+        if (MebukiLoginDiagnostics.ENABLED) {
+            diagnostics = new MebukiLoginDiagnostics();
+            diagnostics.event("settings", SITE, "multiple_windows=" + settings.supportMultipleWindows()
+                    + " js_auto_windows=" + settings.getJavaScriptCanOpenWindowsAutomatically());
+            browser.setOnTouchListener((view, event) -> {
+                if (event.getActionMasked() == android.view.MotionEvent.ACTION_DOWN)
+                    diagnostics.snapshot(browser, "before_touch");
+                else if (event.getActionMasked() == android.view.MotionEvent.ACTION_UP) {
+                    browser.postDelayed(() -> { if (browser != null) diagnostics.snapshot(browser, "after_touch_1s"); }, 1000);
+                    browser.postDelayed(() -> { if (browser != null) diagnostics.snapshot(browser, "after_touch_4s"); }, 4000);
+                }
+                return false; // Preserve normal input handling.
+            });
+        }
+        browser.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture,
+                                                     android.os.Message resultMsg) {
+                if (diagnostics != null) diagnostics.event("create_window", view.getUrl(),
+                        "dialog=" + isDialog + " user_gesture=" + isUserGesture);
+                return super.onCreateWindow(view, isDialog, isUserGesture, resultMsg);
+            }
+            @Override public boolean onConsoleMessage(android.webkit.ConsoleMessage message) {
+                if (diagnostics != null) diagnostics.console(message);
+                return super.onConsoleMessage(message);
+            }
+        });
         browser.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri target = request.getUrl();
                 String scheme = target.getScheme();
+                if (diagnostics != null && request.isForMainFrame()) diagnostics.event("navigation_request", target.toString(),
+                        "redirect=" + request.isRedirect() + " gesture=" + request.hasGesture());
                 if (request.isForMainFrame() && classify(target) == MebukiLoginFlow.Page.GOOGLE_UNSUPPORTED) {
                     navigation.setText("Googleは対象外です。XまたはDiscordを選択してください。");
                     return true;
@@ -98,25 +126,30 @@ public final class MebukiLoginActivity extends Activity {
             }
             @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap icon) {
                 pageFailed = false;
+                if (diagnostics != null) diagnostics.event("page_started", url, "");
                 showNavigation(url, true);
             }
             @Override public void onPageFinished(WebView view, String url) {
+                if (diagnostics != null) diagnostics.snapshot(view, "page_finished");
                 if (!pageFailed && url.equals(view.getUrl())) showNavigation(url, false);
             }
             @Override public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
                 if (request.isForMainFrame()) {
                     pageFailed = true;
+                    if (diagnostics != null) diagnostics.event("network_error", request.getUrl().toString(), "code=" + error.getErrorCode());
                     navigation.setText("ページ通信エラー（" + error.getErrorCode() + "）。認証成功は未確認です。");
                 }
             }
             @Override public void onReceivedHttpError(WebView view, WebResourceRequest request, android.webkit.WebResourceResponse response) {
                 if (request.isForMainFrame()) {
                     pageFailed = true;
+                    if (diagnostics != null) diagnostics.event("http_error", request.getUrl().toString(), "status=" + response.getStatusCode());
                     navigation.setText("ページHTTPエラー（" + response.getStatusCode() + "）。認証成功は未確認です。");
                 }
             }
             @Override public void onReceivedSslError(WebView view, android.webkit.SslErrorHandler handler, android.net.http.SslError error) {
                 handler.cancel();
+                if (diagnostics != null) diagnostics.event("tls_error", view.getUrl(), "cancelled=true");
                 pageFailed = true;
                 navigation.setText("TLS証明書エラーで中止しました。認証成功は未確認です。");
             }
@@ -237,6 +270,7 @@ public final class MebukiLoginActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        if (diagnostics != null) diagnostics.stop();
         if (browser != null) {
             browser.destroy();
             browser = null;

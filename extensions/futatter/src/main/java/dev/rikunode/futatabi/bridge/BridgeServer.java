@@ -21,13 +21,15 @@ final class BridgeServer {
     private static final int PORT = 18765;
     private final AimogeAdapter aimoge;
     private final AnimanchAdapter animanch;
+    private final MebukiAdapter mebuki;
     private final ExtensionApi extension;
     private final ExecutorService workers = Executors.newFixedThreadPool(6);
 
     BridgeServer(Context context) {
         aimoge = new AimogeAdapter(context);
         animanch = new AnimanchAdapter(context);
-        extension = new ExtensionApi(context, aimoge, animanch);
+        mebuki = new MebukiAdapter(context);
+        extension = new ExtensionApi(context, aimoge, animanch, mebuki);
     }
 
     void run() {
@@ -113,7 +115,7 @@ final class BridgeServer {
             } else if (path.startsWith("/animanch/")) {
                 response = animanch.route(path);
             } else if (path.startsWith("/mebuki/")) {
-                response = BridgeResponse.text(503, "Adapter not enabled");
+                response = mebuki.route(path);
             } else {
                 response = BridgeResponse.text(404, "Not found");
             }

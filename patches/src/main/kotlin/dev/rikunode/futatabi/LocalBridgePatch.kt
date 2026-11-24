@@ -53,6 +53,18 @@ private val bridgeManifestPatch = resourcePatch {
                 activity.appendChild(intentFilter)
                 application.appendChild(activity)
             }
+            val mebukiLogin = "dev.rikunode.futatabi.bridge.MebukiLoginActivity"
+            val matching = manifest.getElementsByTagName("activity")
+            if ((0 until matching.length).none {
+                    (matching.item(it) as? Element)?.getAttribute("android:name") == mebukiLogin
+                }
+            ) {
+                val login = document.createElement("activity")
+                login.setAttribute("android:name", mebukiLogin)
+                login.setAttribute("android:exported", "false")
+                login.setAttribute("android:label", "Mebuki login")
+                application.appendChild(login)
+            }
         }
     }
 }

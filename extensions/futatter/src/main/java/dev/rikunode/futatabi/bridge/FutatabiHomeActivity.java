@@ -12,6 +12,7 @@ import android.text.InputType;
 import android.text.TextWatcher;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -176,7 +177,10 @@ public final class FutatabiHomeActivity extends Activity {
         addText("あにまん（ログイン画面なし／PHPセッションを保持）");
         action("あにまん：新規スレ", () -> composeAnimanch(""));
         action("あにまん：スレ一覧から返信", () -> threadPicker("animanch"));
-        addText("めぶき：v0.4.0予定（現在は無効）");
+        addText("めぶき：おためしカタログは5分遅延。新規スレ・添付は未対応。");
+        action("めぶき：ログイン画面（本人操作）", () ->
+                startActivity(new Intent(this, MebukiLoginActivity.class)));
+        action("めぶき：一覧からレス投稿", () -> threadPicker("mebuki"));
     }
 
     private void login() {
@@ -196,7 +200,8 @@ public final class FutatabiHomeActivity extends Activity {
     }
 
     private void threadPicker(String board) {
-        startPage(("animanch".equals(board) ? "あにまん" : "あいもげ") + " • 返信するスレを選ぶ");
+        startPage(("animanch".equals(board) ? "あにまん" :
+                "mebuki".equals(board) ? "めぶき（おためし／遅延）" : "あいもげ") + " • 返信するスレを選ぶ");
         action("戻る", this::home);
         remote("スレ一覧を取得", "GET", "/ext/threads?board=" + board, null, result -> {
             if (result.status != 200) { updateNotice("取得失敗 HTTP " + result.status); return; }
@@ -213,6 +218,7 @@ public final class FutatabiHomeActivity extends Activity {
                     final String selection = id;
                     action(title + " (レス " + entry.optInt("replies") + ")",
                             () -> { if ("animanch".equals(board)) composeAnimanch(selection);
+                                else if ("mebuki".equals(board)) composeMebuki(selection);
                                 else compose(selection); });
                 }
             } catch (Exception ex) { updateNotice("スレ一覧を解析できませんでした"); }
@@ -306,6 +312,44 @@ public final class FutatabiHomeActivity extends Activity {
             attached.add(data.getData());
             updateNotice("画像を" + attached.size() + "件選択しました");
         }
+    }
+
+    private void composeMebuki(String replyTo) {
+        startPage("めぶき • レス投稿（契約検収前）");
+        action("戻る", () -> threadPicker("mebuki"));
+        addText("おためしカタログのスレです。実サイト側での返信可否は本人検収待ち。");
+        final EditText content = input("本文（最大5,000文字／100行）", "", true);
+        final EditText parent = input("返信先メッセージID（任意）", "", false);
+        final CheckBox username = new CheckBox(this);
+        username.setText("投稿者IDを表示");
+        root.addView(username);
+        final CheckBox threadOwner = new CheckBox(this);
+        threadOwner.setText("スレ主表示");
+        root.addView(threadOwner);
+        action("レス投稿を送信（本人検収向け）", () -> {
+            String text = content.getText().toString();
+            if (text.isEmpty() || text.codePointCount(0, text.length()) > 5000 ||
+                    text.split("\\r?\\n", -1).length > 100) {
+                updateNotice("本文は1〜5,000文字・100行以内にしてください");
+                return;
+            }
+            JSONObject body = new JSONObject();
+            try {
+                body.put("threadId", replyTo);
+                body.put("content", text);
+                if (parent.getText().length() > 0)
+                    body.put("replyToId", parent.getText().toString());
+                body.put("showUsername", username.isChecked());
+                body.put("showThreadOwner", threadOwner.isChecked());
+            } catch (Exception ex) { updateNotice("入力内容を作成できませんでした"); return; }
+            remote("めぶきへレス投稿", "POST", "/ext/mebuki/reply", body, result -> {
+                if (result.status == 202) {
+                    startPage("送信応答を受信・成功未確定");
+                    addText("サーバーから応答がありましたが、投稿成功の正式な判定は未検証です。");
+                    action("ホームへ", this::home);
+                } else updateNotice("レス送信できませんでした HTTP " + result.status);
+            });
+        });
     }
 
     private void composeAnimanch(String replyTo) {

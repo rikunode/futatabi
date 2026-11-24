@@ -20,13 +20,17 @@ final class ExtensionApi {
     private final SharedPreferences prefs;
     private final AimogeAdapter aimoge;
     private final AnimanchAdapter animanch;
+    private final MebukiAdapter mebuki;
+    private final MebukiReplyClient mebukiReplies;
     private final AimogeWriteClient client;
     private final SecureRandom random = new SecureRandom();
 
-    ExtensionApi(Context context, AimogeAdapter adapter, AnimanchAdapter animanchAdapter) {
+    ExtensionApi(Context context, AimogeAdapter adapter, AnimanchAdapter animanchAdapter, MebukiAdapter mebukiAdapter) {
         prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE);
         aimoge = adapter;
         animanch = animanchAdapter;
+        mebuki = mebukiAdapter;
+        mebukiReplies = new MebukiReplyClient(context, mebukiAdapter);
         client = new AimogeWriteClient();
         synchronized (this) {
             if (!prefs.contains("local_token")) prefs.edit().putString("local_token", randomUrl(32)).commit();
@@ -61,6 +65,8 @@ final class ExtensionApi {
                     return BridgeServer.BridgeResponse.json(200, aimoge.threadsJson().toString());
                 if ("animanch".equals(board))
                     return BridgeServer.BridgeResponse.json(200, animanch.threadsJson().toString());
+                if ("mebuki".equals(board))
+                    return BridgeServer.BridgeResponse.json(200, mebuki.threadsJson().toString());
                 return BridgeServer.BridgeResponse.text(404, "Unsupported board");
             }
             if ("POST".equals(method) && "/ext/login/aimoge/start".equals(path))
@@ -79,6 +85,11 @@ final class ExtensionApi {
                     return BridgeServer.BridgeResponse.text(413, "Invalid request size");
                 return animanch.post(new JSONObject(new String(body, StandardCharsets.UTF_8)));
             }
+            if ("POST".equals(method) && "/ext/mebuki/reply".equals(path)) {
+                if (body.length == 0 || body.length > 24_000)
+                    return BridgeServer.BridgeResponse.text(413, "Invalid request size");
+                return mebukiReplies.reply(new JSONObject(new String(body, StandardCharsets.UTF_8)));
+            }
             return BridgeServer.BridgeResponse.text(404, "Not found");
         } catch (IllegalArgumentException ex) {
             return BridgeServer.BridgeResponse.text(400, ex.getMessage());
@@ -91,7 +102,7 @@ final class ExtensionApi {
         JSONObject out = new JSONObject();
         out.put("aimoge", loggedIn());
         out.put("animanch", false);
-        out.put("mebuki", false);
+        out.put("mebuki", prefs.contains("mebuki_cookie_header"));
         return BridgeServer.BridgeResponse.json(200, out.toString());
     }
 

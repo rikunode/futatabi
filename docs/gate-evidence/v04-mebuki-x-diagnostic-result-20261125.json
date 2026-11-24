@@ -146,8 +146,8 @@
   "evidence": [
     {
       "path": "docs/gate-evidence/v04-mebuki-x-diagnostic-20261125.log",
-      "bytes": 3766,
-      "sha256": "0e0d01e591dcfb4a19ef2f825abbdcec6269400a1a6045edc9d2ae1eb655e55b"
+      "bytes": 3743,
+      "sha256": "99a6f2d25862d9857abea76514f6655f40474bbcb71182f7c053ff62db11fced"
     },
     {
       "path": "docs/gate-evidence/v04-mebuki-x-login-ui-20261125.xml",

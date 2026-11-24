@@ -74,6 +74,16 @@ MebukiSessionはプロバイダーを引数にせず、同じめぶきHTTPSホ�
 
 19:11 JST、e3d5f05・通常HTTPS版APK・保存済みめぶきセッションなし、全3ボタンを持つ公式ページを確認。19:12:18 JST、Android activity eventで別案件 `com.hatena.android.bookmark.morphe` のPreferenceActivityへの切替を確認。MUSEに調整を依頼し、専有順序が確定するまで端末操作を停止する指示を受領。X・Googleのボタンクリック、外部ブラウザ実地試験は未実施。実機OPPOにも触れていない。コード／APK／認証設定／通信ルールの変更なし。
 
+### 所有者判断の追記（2026-11-24）
+
+MUSEから、めぶき開発者兼所有者の判断としてログイン専用WebViewのUA変更によるGoogle認証制限の突破を承認する旨の通知を受領した。ただし、めぶきの所有権はGoogle側の埋め込み認証に対するセキュリティ要件を解除するものではない。制限突破を目的とするUA変更は実装せず、実地試験も行っていない。
+
+**正規ルートの設計候補（未実装）**：めぶきサーバー側でアプリ向け認証開始・復帰・セッション交換を正式に提供する。既定ブラウザのCustom Tabs／Auth Tabで公式OAuthを開始し、認証完了後は検証済みのアプリ向けcallbackへ戻る。短寿命・一回限り・開始したアプリの認証要求に紐づくコードをサーバーで交換し、めぶきの正規アプリ用セッションを確立する。既存のWebView CookieやGoogle資格情報を外部ブラウザから抽出しない。state・PKCE・redirect URIの検証を維持し、コードや資格情報をログに出さない。Better Authには公式モバイル連携と一回限りのトークンプラグインがあるが、めぶきでの導入状況・対応バージョン・正規契約は未確認で、プラグインの存在のみを実装可能性の証明とはしない。
+
+参考：Google OAuthポリシー https://developers.google.com/identity/protocols/oauth2/policies 、Android認証ブラウザ https://developer.android.com/identity/passkeys/architecture 、Better Authモバイル連携 https://better-auth.com/docs/integrations/expo 、一回限りのトークン https://better-auth.com/docs/plugins/one-time-token 。
+
+必要な次の設計判断は、めぶきサーバーの担当者による正規アプリ認証契約の確定。共有エミュレータの操作停止を維持する。Xの入口試験は専有許可後、Discordは既存の入口到達証拠を再利用し、全プロバイダーの実認証済みセッション検収は未実施とする。
+
 ## 5. 残件と停止条件
 
 実サイトの認証済みcallback、セッション確立・復元、認証済み読み取りの変換、返信成功判定、新規スレ／添付はまだ本人検収待ち。新規スレ・添付は契約を確定してから実装する。Discordは本人操作境界に到達済み。X／Googleの追加試験は共有端末の専有順序確定まで停止する。バージョン変更・Releaseなし。証拠：[v04-mebuki-live-anonymous-20261124.json](gate-evidence/v04-mebuki-live-anonymous-20261124.json)。

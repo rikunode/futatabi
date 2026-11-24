@@ -128,7 +128,7 @@
     "versionName": "3.1.1",
     "versionCode": 65,
     "firstInstallTimePreserved": true,
-    "appDataPreservedByReplaceInstall": true,
+    "installMode": "adb install -r; no uninstall or app-data deletion was performed",
     "appForceStopped": true,
     "adbReverseAfterCleanup": [
       "host-20 tcp:18766 tcp:18766"

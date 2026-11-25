@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-11-25T17:04:55",
-  "description": "v0.4.0-beta.7: Fix catalog sort-query and cat/ thumbnail routing; futatabi branding default ON. Mebuki login experimental; authenticated thread conversion pending.",
-  "download_url": "https://github.com/rikunode/futatabi/releases/download/v0.4.0-beta.7/futatabi-patches-v0.4.0-beta.7.mpp",
+  "created_at": "2026-11-25T17:54:27",
+  "description": "v0.4.0-beta.8: Board login button for Aimoge/Mebuki only (ARM64, default ON); owner runtime verification pending. Mebuki authenticated thread conversion pending.",
+  "download_url": "https://github.com/rikunode/futatabi/releases/download/v0.4.0-beta.8/futatabi-patches-v0.4.0-beta.8.mpp",
   "signature_download_url": "",
-  "version": "0.4.0-beta.7"
+  "version": "0.4.0-beta.8"
 }

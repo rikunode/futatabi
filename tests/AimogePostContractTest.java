@@ -50,7 +50,7 @@ public final class AimogePostContractTest {
                 check(!headers.containsKey("cookie"),"no clearance cookies");
                 JSONObject body=new JSONObject(data.toString("UTF-8"));
                 UUID.fromString(body.getString("requestId"));
-                check(body.getString("body").equals("fixture") && body.getString("deleteKey").equals("fixture-key"),"content");
+                check(body.getString("body").equals(url.getPath().equals("/threads/aimg") ? "fixture" : ">No.123456789\nfixture") && body.getString("deleteKey").equals("fixture-key"),"content");
                 JSONObject proof=new JSONObject(new String(java.util.Base64.getDecoder().decode(body.getString("altcha")),StandardCharsets.UTF_8));
                 check(proof.getInt("number")==42 && proof.getString("signature").equals(SIGNATURE)
                         && proof.getString("challenge").equals(challenge()) && proof.getString("salt").equals(SALT)
@@ -88,12 +88,13 @@ public final class AimogePostContractTest {
         check(send(api,p).status==401 && attempts==0,"no login");
         prefs.edit().putString("credential",TOKEN).putLong("credential_expires",System.currentTimeMillis()+600000).commit();
         check(send(api,p).status==400 && challenges==0 && attempts==0,"new thread no attachment");
-        p.put("threadId",THREAD);
+        p.put("threadId",THREAD).put("body", PostPresentation.quote("aimoge", "123456789", "fixture"));
         failChallenge=true;
         check(send(api,p).status==503 && attempts==0,"challenge failure stops posting");
         failChallenge=false;
         check(send(api,p).status==403 && attempts==1 && challenges==2,"reply request checked, no success");
         p.remove("threadId");
+        p.put("body", "fixture");
         p.put("attachments",new JSONArray().put(new JSONObject().put("base64","AQID").put("mime","image/jpeg")));
         expectedPath[0]="/threads/aimg";
         check(send(api,p).status==403 && attempts==2 && presigns==1 && challenges==3,"new thread request checked, no success");

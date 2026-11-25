@@ -138,6 +138,25 @@ final class AnimanchAdapter {
         return html.toString().getBytes(SJIS);
     }
 
+    JSONObject replyTargets(String id) throws Exception {
+        String board = prefs.getString("board." + id, null);
+        if (board == null) throw new IllegalArgumentException("Unknown thread");
+        String raw = new String(fetch(HOST + "/board/" + board + "/", 30000L, 1_700_000), StandardCharsets.UTF_8);
+        Matcher matches = RES.matcher(raw);
+        JSONArray targets = new JSONArray();
+        String title = "";
+        while (matches.find() && targets.length() < 220) {
+            Matcher body = RES_BODY.matcher(matches.group(2));
+            if (!body.find()) continue;
+            String excerpt = PostPresentation.excerpt(plain(BACKLINKS.matcher(body.group(1)).replaceAll("")));
+            String number = matches.group(1);
+            if (targets.length() == 0) title = excerpt;
+            targets.put(new JSONObject().put("number", number)
+                    .put("seq", Integer.parseInt(number)).put("excerpt", excerpt));
+        }
+        return new JSONObject().put("title", title).put("targets", targets);
+    }
+
     private byte[] thread(String id, String board) throws Exception {
         String raw = new String(fetch(HOST + "/board/" + board + "/", 30000L, 1_700_000), StandardCharsets.UTF_8);
         StringBuilder html = page("あにまんスレ");
@@ -276,6 +295,7 @@ final class AnimanchAdapter {
                     return BridgeServer.BridgeResponse.json(409, partial.toString());
                 }
             }
+            synchronized (cache) { cache.remove(referer); }
             JSONObject completed = new JSONObject();
             completed.put("number", number); completed.put("thread", thread);
             completed.put("jump", jump); completed.put("attachmentUploaded", true);
@@ -354,7 +374,7 @@ final class AnimanchAdapter {
 
     private static String boundedError(NetworkResponse response) {
         String s = new String(response.bytes, StandardCharsets.UTF_8);
-        return s.substring(0, Math.min(s.length(), 900));
+        return PostPresentation.error(s);
     }
 
     private synchronized void throttle() throws Exception {

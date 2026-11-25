@@ -69,6 +69,15 @@ final class ExtensionApi {
                     return BridgeServer.BridgeResponse.json(200, mebuki.threadsJson().toString());
                 return BridgeServer.BridgeResponse.text(404, "Unsupported board");
             }
+            if ("GET".equals(method) && path.startsWith("/ext/reply-targets?")) {
+                Map<String,String> q = query(path);
+                String id = q.getOrDefault("id", "");
+                if ("aimoge".equals(q.get("board")))
+                    return BridgeServer.BridgeResponse.json(200, aimoge.replyTargets(id).toString());
+                if ("animanch".equals(q.get("board")) && id.matches("[0-9]{13}"))
+                    return BridgeServer.BridgeResponse.json(200, animanch.replyTargets(id).toString());
+                return BridgeServer.BridgeResponse.text(400, "Invalid reply target");
+            }
             if ("POST".equals(method) && "/ext/login/aimoge/start".equals(path))
                 return startLogin();
             if ("POST".equals(method) && "/ext/login/aimoge/logout".equals(path)) {
@@ -239,6 +248,7 @@ final class ExtensionApi {
         if (response.status != 201)
             return BridgeServer.BridgeResponse.json(response.status, safeJson(response.text));
         JSONObject result = response.json();
+        if (aimoge != null && !threadId.isEmpty()) aimoge.invalidateThread(threadId);
         String key = "history_" + UUID.randomUUID();
         JSONObject history = new JSONObject();
         history.put("result", result);

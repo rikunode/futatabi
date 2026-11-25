@@ -33,21 +33,47 @@ public final class MebukiLoginActivity extends Activity {
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
         setTitle("めぶきログイン");
+        if (getActionBar() != null) getActionBar().hide();
+        if (android.os.Build.VERSION.SDK_INT >= 30) getWindow().setDecorFitsSystemWindows(false);
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setBackgroundColor(Color.WHITE);
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            layout.setOnApplyWindowInsetsListener((view, insets) -> {
+                android.graphics.Insets safe = insets.getInsets(
+                        android.view.WindowInsets.Type.systemBars() | android.view.WindowInsets.Type.displayCutout()
+                                | android.view.WindowInsets.Type.ime());
+                view.setPadding(safe.left, safe.top, safe.right, safe.bottom);
+                return android.view.WindowInsets.CONSUMED;
+            });
+        } else layout.setFitsSystemWindows(true);
+        LinearLayout controls = new LinearLayout(this);
+        controls.setOrientation(LinearLayout.VERTICAL);
+        android.widget.ScrollView details = new android.widget.ScrollView(this);
+        details.addView(controls);
+        details.setVisibility(android.view.View.GONE);
+        Button toggle = new Button(this);
+        toggle.setText("ログイン管理");
+        toggle.setOnClickListener(view -> {
+            boolean show = details.getVisibility() != android.view.View.VISIBLE;
+            details.setVisibility(show ? android.view.View.VISIBLE : android.view.View.GONE);
+            toggle.setText(show ? "管理を閉じる" : "ログイン管理");
+        });
+        layout.addView(toggle);
+        layout.addView(details, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
         status = new TextView(this);
         status.setText("対応対象：X／Discord。Googleは対象外。本人ログイン後に保存を押してください。");
         status.setPadding(20, 16, 20, 16);
-        layout.addView(status);
+        controls.addView(status);
 
         navigation = new TextView(this);
         navigation.setText("公式サイトを読み込み中…");
-        layout.addView(navigation);
+        controls.addView(navigation);
         check = new Button(this);
         check.setText("ログイン済みセッションを確認して端末内へ保存");
         check.setOnClickListener(view -> verifyAndStore());
-        layout.addView(check);
+        controls.addView(check);
 
         erase = new Button(this);
         erase.setText("保存したセッション情報だけを削除");
@@ -56,16 +82,16 @@ public final class MebukiLoginActivity extends Activity {
             boolean removed = getSharedPreferences(PREF, MODE_PRIVATE).edit().remove(MebukiSession.KEY).commit();
             status.setText(removed ? "アプリ専用の保存情報を消去しました。WebView内のサイトCookieは残ります。" : "保存情報の消去に失敗しました。");
         });
-        layout.addView(erase);
+        controls.addView(erase);
 
         EditText slug = new EditText(this);
         slug.setSingleLine(true);
         slug.setHint("スレURLの /t/ 以下のID（任意）");
-        layout.addView(slug);
+        controls.addView(slug);
         inspect = new Button(this);
         inspect.setText("保存済み認証で読取契約を確認（値は記録しない）");
         inspect.setOnClickListener(view -> inspectContract(slug.getText().toString().trim()));
-        layout.addView(inspect);
+        controls.addView(inspect);
         cancel = new Button(this);
         cancel.setText("認証を中止してめぶきへ戻る");
         cancel.setOnClickListener(view -> {
@@ -74,7 +100,7 @@ public final class MebukiLoginActivity extends Activity {
             status.setText("中止操作：公式サイトへ戻ります。保存済み認証は変更しません。");
             browser.loadUrl(SITE);
         });
-        layout.addView(cancel);
+        controls.addView(cancel);
 
         browser = new WebView(this);
         WebSettings settings = browser.getSettings();
@@ -157,6 +183,7 @@ public final class MebukiLoginActivity extends Activity {
         layout.addView(browser, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
         setContentView(layout);
+        layout.requestApplyInsets();
         browser.loadUrl(SITE);
     }
 

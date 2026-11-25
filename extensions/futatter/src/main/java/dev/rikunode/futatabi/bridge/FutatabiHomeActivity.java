@@ -44,6 +44,7 @@ public class FutatabiHomeActivity extends Activity {
     private EditText bodyField, deleteKeyField;
     private TextView notice, count;
     private String threadId = "";
+    private String selectedReplyNumber = "";
     private final List<Uri> attached = new ArrayList<>();
 
     private static final class Response {
@@ -213,7 +214,7 @@ public class FutatabiHomeActivity extends Activity {
         remote("あいもげの認証URLを作成", "POST", "/ext/login/aimoge/start",
                 new JSONObject(), result -> {
                     if (result.status != 200) {
-                        updateNotice("ログイン開始失敗 HTTP " + result.status + ": " + result.body);
+                        updateNotice("ログイン開始失敗 HTTP " + result.status + ": " + PostPresentation.error(result.body));
                         return;
                     }
                     try {
@@ -253,11 +254,79 @@ public class FutatabiHomeActivity extends Activity {
         });
     }
 
+    private void replySelector(String board, String id) {
+        selectedReplyNumber = "";
+        if (id.isEmpty()) return;
+        final LinearLayout page = root;
+        TextView title = addText("\u8fd4\u4fe1\u5148\u30b9\u30ec\u3092\u53d6\u5f97\u4e2d...");
+        TextView target = addText("\u30b9\u30ec\u5168\u4f53\u3078\u8fd4\u4fe1");
+        final JSONArray[] options = {null};
+        Button choose = action("\u8fd4\u4fe1\u5148\u306e\u30ec\u30b9\u3092\u9078\u3076", () -> {
+            JSONArray items = options[0];
+            if (items == null) return;
+            String[] labels = new String[items.length()+1];
+            labels[0] = "\u30b9\u30ec\u5168\u4f53\u3078\u8fd4\u4fe1";
+            for (int i=0; i<items.length(); i++) {
+                JSONObject item = items.optJSONObject(i);
+                labels[i+1] = ("aimoge".equals(board) ? "No." + item.optString("number") + " / " : "")
+                        + "\u30ec\u30b9 " + item.optInt("seq") + "\n" + item.optString("excerpt");
+            }
+            new android.app.AlertDialog.Builder(this).setTitle("\u8fd4\u4fe1\u5148\u3092\u9078\u629e")
+                    .setItems(labels, (dialog, index) -> {
+                        selectedReplyNumber = index == 0 ? "" : items.optJSONObject(index-1).optString("number");
+                        target.setText(index == 0 ? labels[index] : labels[index] + "\n"
+                                + PostPresentation.quote(board, selectedReplyNumber, "").trim());
+                    }).setNegativeButton("\u30ad\u30e3\u30f3\u30bb\u30eb", null).show();
+        });
+        choose.setEnabled(false);
+        remote("\u8fd4\u4fe1\u5148\u3092\u53d6\u5f97", "GET", "/ext/reply-targets?board=" + board + "&id=" + id, null, result -> {
+            if (root != page) return;
+            if (result.status != 200) {
+                title.setText("\u30b9\u30ec\u60c5\u5831\u3092\u53d6\u5f97\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f");
+                updateNotice("HTTP " + result.status + " " + PostPresentation.error(result.body));
+                return;
+            }
+            try {
+                JSONObject data = new JSONObject(result.body);
+                String name = data.optString("title");
+                title.setText("\u8fd4\u4fe1\u5148\u30b9\u30ec: " + (name.isEmpty() ? "\u672c\u6587\u306a\u3057" : name));
+                options[0] = data.getJSONArray("targets");
+                choose.setEnabled(options[0].length() > 0);
+                updateNotice("");
+            } catch (Exception ex) { updateNotice("\u8fd4\u4fe1\u5148\u30c7\u30fc\u30bf\u89e3\u6790\u5931\u6557"); }
+        });
+    }
+
+    private void showPostSuccess(String board, String raw, String expectedThread) {
+        String message;
+        try {
+            message = PostPresentation.completion(board, raw, expectedThread);
+            if (message == null) {
+                startPage("\u6295\u7a3f\u53d7\u7406");
+                addText("\u6295\u7a3f\u306f\u53d7\u7406\u3055\u308c\u307e\u3057\u305f\u304c\u3001\u516c\u958b\u8868\u793a\u306f\u672a\u78ba\u8a8d\u3067\u3059\u3002");
+                action("\u623b\u308b", directReply() ? this::finish : this::home);
+                return;
+            }
+        } catch (Exception ex) {
+            startPage("\u6295\u7a3f\u5fdc\u7b54\u3092\u53d7\u4fe1");
+            addText("\u7d50\u679c\u3092\u89e3\u6790\u3067\u304d\u307e\u305b\u3093\u3002\u518d\u9001\u305b\u305a\u30b9\u30ec\u3092\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002");
+            action("\u623b\u308b", directReply() ? this::finish : this::home);
+            return;
+        }
+        if (directReply()) {
+            android.widget.Toast.makeText(this, message + "\u3002\u30b9\u30ec\u3092\u66f4\u65b0\u3057\u3066\u304f\u3060\u3055\u3044", android.widget.Toast.LENGTH_LONG).show();
+            finish();
+        } else {
+            startPage(message);
+            action("\u30db\u30fc\u30e0\u3078", this::home);
+        }
+    }
+
     private void compose(String replyTo) {
         threadId = replyTo;
         attached.clear();
         startPage(replyTo.isEmpty() ? "あいもげ • 新規スレ" : "あいもげ • レス投稿");
-        if (directReply()) addText("返信先スレ: No." + getIntent().getStringExtra("virtualId"));
+        replySelector("aimoge", replyTo);
         action("戻る", directReply() ? this::finish : replyTo.isEmpty() ? this::home : () -> threadPicker("aimoge"));
         addText("本文（最大4,000字）");
         bodyField = input("本文", "", true);
@@ -281,8 +350,8 @@ public class FutatabiHomeActivity extends Activity {
             startActivityForResult(pick, CHOOSE_IMAGE);
         });
         action("投稿内容を送信", () -> {
-            String text = bodyField.getText().toString();
-            if (text.isEmpty() || text.codePointCount(0, text.length()) > 4000) {
+            String text = PostPresentation.quote("aimoge", selectedReplyNumber, bodyField.getText().toString());
+            if (bodyField.getText().length() == 0 || text.codePointCount(0, text.length()) > 4000) {
                 updateNotice("本文を1〜4,000字で入力してください");
                 return;
             }
@@ -325,10 +394,8 @@ public class FutatabiHomeActivity extends Activity {
                     runOnUiThread(() -> {
                         if (isFinishing() || isDestroyed()) return;
                         if (result.status == 201) {
-                            startPage("投稿成功");
-                            addText(result.body);
-                            action(directReply() ? "スレに戻る" : "ホームへ", directReply() ? this::finish : this::home);
-                        } else updateNotice("投稿失敗 HTTP " + result.status + ": " + result.body);
+                            showPostSuccess("aimoge", result.body, replyTo);
+                        } else updateNotice("投稿失敗 HTTP " + result.status + ": " + PostPresentation.error(result.body));
                     });
                 } catch (Exception ex) {
                     runOnUiThread(() -> updateNotice("投稿準備失敗: " + ex.getMessage()));
@@ -392,7 +459,7 @@ public class FutatabiHomeActivity extends Activity {
     private void composeAnimanch(String replyTo) {
         attached.clear();
         startPage(replyTo.isEmpty() ? "あにまん • 新規スレ" : "あにまん • レス投稿");
-        if (directReply()) addText("返信先スレ: No." + getIntent().getStringExtra("virtualId"));
+        replySelector("animanch", replyTo);
         action("戻る", directReply() ? this::finish : replyTo.isEmpty() ? this::home : () -> threadPicker("animanch"));
         final EditText title = replyTo.isEmpty() ? input("スレタイトル", "", false) : null;
         final EditText category = replyTo.isEmpty() ? input("カテゴリID（掲示板のカテゴリ番号）", "", false) : null;
@@ -406,8 +473,8 @@ public class FutatabiHomeActivity extends Activity {
             startActivityForResult(picker, CHOOSE_IMAGE);
         });
         action("あにまんへ送信", () -> {
-            String text = body.getText().toString();
-            if (text.isEmpty() || text.length() > 1000) {
+            String text = PostPresentation.quote("animanch", selectedReplyNumber, body.getText().toString());
+            if (body.getText().length() == 0 || text.length() > 1000) {
                 updateNotice("本文は1〜1,000字で入力してください");
                 return;
             }
@@ -450,10 +517,8 @@ public class FutatabiHomeActivity extends Activity {
                     runOnUiThread(() -> {
                         if (isFinishing() || isDestroyed()) return;
                         if (result.status == 201) {
-                            startPage("あにまん • 投稿完了");
-                            addText(result.body);
-                            action(directReply() ? "スレに戻る" : "ホームへ", directReply() ? this::finish : this::home);
-                        } else updateNotice("投稿失敗 HTTP " + result.status + ": " + result.body);
+                            showPostSuccess("animanch", result.body, replyTo);
+                        } else updateNotice("投稿失敗 HTTP " + result.status + ": " + PostPresentation.error(result.body));
                     });
                 } catch (Exception ex) {
                     runOnUiThread(() -> updateNotice("送信準備失敗: " + ex.getMessage()));

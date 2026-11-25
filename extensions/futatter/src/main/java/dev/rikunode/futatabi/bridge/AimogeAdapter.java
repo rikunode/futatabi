@@ -120,6 +120,29 @@ final class AimogeAdapter {
         return html.toString().getBytes(SJIS);
     }
 
+    synchronized void invalidateThread(String uuid) {
+        cache.remove(API + "/thread/" + uuid + "/public");
+    }
+
+    JSONObject replyTargets(String uuid) throws Exception {
+        java.util.UUID.fromString(uuid);
+        ensureClientPolicy();
+        JSONArray posts = new JSONObject(new String(fetch(API + "/thread/" + uuid + "/public",
+                30000L, true), StandardCharsets.UTF_8)).getJSONArray("posts");
+        JSONArray targets = new JSONArray();
+        String title = "";
+        for (int i = 0; i < posts.length(); i++) {
+            JSONObject post = posts.getJSONObject(i);
+            String excerpt = PostPresentation.excerpt(post.optString("body", ""));
+            int seq = post.optInt("seq", i);
+            if (seq == 0) title = excerpt;
+            long number = post.optLong("postSequenceNo", 0);
+            if (number > 0) targets.put(new JSONObject().put("number", Long.toString(number))
+                    .put("seq", seq).put("excerpt", excerpt));
+        }
+        return new JSONObject().put("title", title).put("targets", targets);
+    }
+
     private byte[] thread(String id, String uuid) throws Exception {
         ensureClientPolicy();
         JSONObject result = new JSONObject(new String(fetch(API + "/thread/" + uuid + "/public",

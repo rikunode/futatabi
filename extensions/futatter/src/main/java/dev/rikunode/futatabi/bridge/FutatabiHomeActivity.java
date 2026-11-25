@@ -209,6 +209,15 @@ public class FutatabiHomeActivity extends Activity {
                 startActivityForResult(new Intent(this, MebukiLoginActivity.class), MEBUKI_LOGIN));
         action("めぶき：本文を読む", this::mebukiReaderPicker);
         action("めぶき：一覧からレス投稿", () -> threadPicker("mebuki"));
+        action("\u3081\u3076\u304d\uff1a\u6295\u7a3f\u8a3a\u65ad",this::mebukiPostDiagnostic);
+    }
+
+    private void mebukiPostDiagnostic() {
+        startPage("\u3081\u3076\u304d\uff1a\u6700\u5f8c\u306e\u6295\u7a3f\u8a3a\u65ad");
+        addText("\u5fdc\u7b54\u306e\u7a2e\u985e\u3068\u7167\u5408\u7d50\u679c\u306e\u307f\u3002Cookie\u5024\u30fb\u672c\u6587\u30fbID\u306f\u4fdd\u5b58\u3057\u307e\u305b\u3093\u3002");
+        addText(MebukiPostDiagnostic.report(this));
+        action("\u66f4\u65b0",this::mebukiPostDiagnostic);
+        action("\u30db\u30fc\u30e0\u3078",this::home);
     }
 
     private void login() {

@@ -140,20 +140,31 @@ final class MebukiThreadData {
         return false;
     }
 
-    String confirmedReplyNumber(String thread,MebukiThreadData before,String content,String parent) {
-        if(posts.size()<=before.posts.size()||timestamp<before.timestamp)return null;
+    enum Match { NOT_CHECKED, NO_NEW_POSTS, TIMESTAMP_REGRESSED, ORDER_CHANGED,
+        NO_OWN_POST, MULTIPLE_OWN_POSTS, DELETED, BODY_MISMATCH, PARENT_MISMATCH,
+        TIME_MISMATCH, MATCHED }
+    static final class Confirmation {
+        final Match reason; final String number;
+        Confirmation(Match reason,String number){this.reason=reason;this.number=number;}
+    }
+    Confirmation confirmReply(String thread,MebukiThreadData before,String content,String parent) {
+        if(timestamp<before.timestamp)return new Confirmation(Match.TIMESTAMP_REGRESSED,null);
+        if(posts.size()<=before.posts.size())return new Confirmation(Match.NO_NEW_POSTS,null);
         for(int i=0;i<before.posts.size();i++)
-            if(!before.posts.get(i).id.equals(posts.get(i).id))return null;
+            if(!before.posts.get(i).id.equals(posts.get(i).id))return new Confirmation(Match.ORDER_CHANGED,null);
         int match=-1;
         for(int i=before.posts.size();i<posts.size();i++){
-            NativePost p=posts.get(i);
-            if(!p.author)continue;
-            // More than one new own post is ambiguous, even if only one text matches.
-            if(match!=-1||p.deleted||!p.body.equals(content)||!p.replyTo.equals(parent)||
-                    MebukiTurboStream.dateMillis(p.date)<before.timestamp)return null;
+            if(!posts.get(i).author)continue;
+            if(match!=-1)return new Confirmation(Match.MULTIPLE_OWN_POSTS,null);
             match=i;
         }
-        return match<0?null:nativeNumber(thread,match);
+        if(match<0)return new Confirmation(Match.NO_OWN_POST,null);
+        NativePost p=posts.get(match);
+        if(p.deleted)return new Confirmation(Match.DELETED,null);
+        if(!p.body.replace("\r\n","\n").replace('\r','\n').equals(content))return new Confirmation(Match.BODY_MISMATCH,null);
+        if(!p.replyTo.equals(parent))return new Confirmation(Match.PARENT_MISMATCH,null);
+        if(MebukiTurboStream.dateMillis(p.date)<before.timestamp)return new Confirmation(Match.TIME_MISMATCH,null);
+        return new Confirmation(Match.MATCHED,nativeNumber(thread,match));
     }
 
     /** Futaba compatibility structure used by the stock thread parser. */

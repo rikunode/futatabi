@@ -13,19 +13,21 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class MebukiPostGate extends Instrumentation {
  static final String PKG="com.Nanasaki.ftutter.morphe";
  static final String STORE="futatabi_extension_private", KEY="mebuki_cookie_header";
- static final String COOKIE="mock_session=synthetic-beta21-only";
+ static final String COOKIE="mock_session=synthetic-beta22-only";
  static final String FIXTURE="{\"timestamp\":D\"2026-11-25T15:00:00.000Z\",\"messageCount\":2,\"messages\":[{\"id\":\"fixture-op\",\"createdAt\":@1,\"content\":\"fixture <script>no execution</script>\",\"replyTo\":null,\"deletedAt\":null,\"attachments\":[{\"fileType\":\"image/jpeg\",\"filePath\":\"https://storage.mebuki.moe/uploads/attachments/aa/bb/fixture.jpg\",\"createdAt\":@1,\"spoiler\":false,\"nsfw\":false,\"gore\":false,\"other\":false}]},{\"id\":\"fixture-reply\",\"createdAt\":D\"2026-11-25T15:01:00.000Z\",\"content\":\"reply fixture\\n>quote\",\"replyTo\":\"fixture-op\",\"deletedAt\":u,\"attachments\":[{\"fileType\":\"image/png\",\"filePath\":\"https://storage.mebuki.moe/uploads/attachments/aa/bb/hidden.png\",\"createdAt\":@1,\"spoiler\":true,\"nsfw\":false,\"gore\":false,\"other\":false}]},{\"id\":\"fixture-deleted\",\"createdAt\":@1,\"content\":\"never display this deleted content\",\"replyTo\":null,\"deletedAt\":@1,\"attachments\":[]}]}\n";
  static final String CATALOG="{\"threads\":[{\"slug\":\"fixture123\",\"name\":\"Fixture first\",\"messageCount\":2,\"imageUrl\":\"https://storage.mebuki.moe/uploads/attachments/aa/bb/fixture.jpg\"},{\"slug\":\"fixture456\",\"name\":\"Fixture second\",\"messageCount\":2,\"imageUrl\":\"https://storage.mebuki.moe/uploads/attachments/aa/bb/fixture2.jpg\"}]}";
  final AtomicInteger sessionReads=new AtomicInteger(),threadReads=new AtomicInteger(),imageReads=new AtomicInteger();
  volatile String lastRoute="";
  volatile String scenario="success", added="";
- volatile int submissions=0;
- volatile boolean expired=false;
- volatile String expectedContent="beta21 fixture reply",expectedParent="";
+ volatile int submissions=0, accepted=0;
+ volatile String readCookie=COOKIE, actionCookie=COOKIE;
+ boolean scopeOnly;
+ volatile boolean expired=false, afterReadFails=false;
+ volatile String expectedContent="beta22 fixture reply",expectedParent="";
 
  byte[] jpg;
  boolean baselineTrace;
- @Override public void onCreate(Bundle b){super.onCreate(b);baselineTrace="true".equals(b.getString("baselineTrace"));start();}
+ @Override public void onCreate(Bundle b){super.onCreate(b);baselineTrace="true".equals(b.getString("baselineTrace"));scopeOnly="true".equals(b.getString("scopeOnly"));start();}
  void check(boolean b,String name){if(!b)throw new AssertionError(name);}
  void setupNetwork() throws Exception{
    Bitmap bmp=Bitmap.createBitmap(48,48,Bitmap.Config.ARGB_8888);bmp.eraseColor(Color.GRAY);
@@ -44,49 +46,70 @@ public final class MebukiPostGate extends Instrumentation {
          if("/t/fixture123.data".equals(path)&&!posted){
            posted=true;submissions++;
            check("POST".equals(getRequestMethod()),"official action method");
-           check(COOKIE.equals(getRequestProperty("Cookie")),"official action cookie");
+           check(actionCookie.equals(getRequestProperty("Cookie")),"official action cookie");
            check("https://mebuki.moe".equals(getRequestProperty("Origin")),"official origin");
            check("https://mebuki.moe/t/fixture123".equals(getRequestProperty("Referer")),"official referer");
            check(!getInstanceFollowRedirects(),"no redirects");
+           check("*/*".equals(getRequestProperty("Accept")),"browser fetch accept");
            String type=getRequestProperty("Content-Type");
            check(type.startsWith("multipart/form-data; boundary="),"multipart");
            String boundary=type.substring(type.indexOf("boundary=")+9);
            String body=new String(sent.toByteArray(),StandardCharsets.UTF_8);
            check(body.endsWith("--"+boundary+"--\r\n"),"multipart terminator");
-           java.util.Map<String,String> fields=new java.util.HashMap<>();
+           java.util.Map<String,String> fields=new java.util.LinkedHashMap<>();
            java.util.regex.Matcher m=java.util.regex.Pattern.compile("Content-Disposition: form-data; name=\"([A-Za-z]+)\"\r\n\r\n(.*?)\r\n--"+java.util.regex.Pattern.quote(boundary),java.util.regex.Pattern.DOTALL).matcher(body);
            while(m.find())fields.put(m.group(1),m.group(2));
            check(fields.size()==(expectedParent.isEmpty()?3:4),"field count");
-           check(expectedContent.equals(fields.get("content")),"content field");
+           check(expectedContent.replace("\n","\r\n").equals(fields.get("content")),"content field");
+           check(new java.util.ArrayList<>(fields.keySet()).equals(expectedParent.isEmpty()?java.util.Arrays.asList("content","showUsername","showThreadOwner"):java.util.Arrays.asList("replyToId","content","showUsername","showThreadOwner")),"browser field order");
            check(expectedParent.equals(fields.getOrDefault("replyToId","")),"parent field");
            check("".equals(fields.get("showUsername"))&&"".equals(fields.get("showThreadOwner")),"anonymous switches");
            if("rate".equals(scenario))code=429;
-           else if("forbidden".equals(scenario))code=403;
+           else if("forbidden".equals(scenario)||"challenge".equals(scenario))code=403;
            else if("unauthorized".equals(scenario))code=401;
-           else if("success".equals(scenario)||"ambiguous".equals(scenario)){
-             String bodyJson=org.json.JSONObject.quote(expectedContent),parent=expectedParent.isEmpty()?"null":org.json.JSONObject.quote(expectedParent);
+           else if("validation".equals(scenario))code=422;
+           else if(java.util.Arrays.asList("success","ambiguous","redirect","noContent","bodyMismatch","noOwn","readFailure","unknownAccepted").contains(scenario)){
+             accepted++;
+             if("redirect".equals(scenario)||"noContent".equals(scenario))code=204;
+             if("readFailure".equals(scenario))afterReadFails=true;
+             String bodyJson=org.json.JSONObject.quote("bodyMismatch".equals(scenario)?"different body":expectedContent.replace("\n","\r\n")),parent=expectedParent.isEmpty()?"null":org.json.JSONObject.quote(expectedParent);
              added=",{\"id\":\"fixture-new\",\"createdAt\":D\"2026-11-25T15:04:00Z\",\"content\":"+bodyJson+",\"replyTo\":"+parent+",\"isAuthor\":true,\"deletedAt\":null,\"attachments\":[]}";
              if("ambiguous".equals(scenario))added+=added.replace("fixture-new","fixture-other");
+             if("noOwn".equals(scenario))added=added.replace("\"isAuthor\":true","\"isAuthor\":false");
            }
          }
+         if(afterReadFails&&path.matches("/api/thread/fixture123/messages\\?initial=1"))return 503;
          return code;
        }
-       public String getContentType(){return "/t/fixture123.data".equals(path)?"text/x-script":"application/json";}
+       public String getContentType(){return "/t/fixture123.data".equals(path)?("unknown".equals(scenario)||"unknownAccepted".equals(scenario)||"challenge".equals(scenario)?"text/html":"text/x-script; charset=utf-8"):"application/json";}
+       public String getHeaderField(String key){
+         if(!"/t/fixture123.data".equals(path))return null;
+         if("X-Remix-Response".equalsIgnoreCase(key)&&!java.util.Arrays.asList("unknown","unknownAccepted","challenge","forbidden","unauthorized","rate").contains(scenario))return "yes";
+         if("X-Remix-Redirect".equalsIgnoreCase(key)&&"redirect".equals(scenario))return "/t/fixture123";
+         if("cf-mitigated".equalsIgnoreCase(key)&&"challenge".equals(scenario))return "challenge";
+         return null;
+       }
+       public InputStream getErrorStream(){try{return getInputStream();}catch(IOException ex){return null;}}
        public InputStream getInputStream()throws IOException{
          getResponseCode();
          if("/t/fixture123.data".equals(path)){
-           String body="error".equals(scenario)?"{\"data\":{\"status\":\"error\"}}":
-                  "unknown".equals(scenario)?"<html>unknown</html>":"{\"data\":{\"status\":\"success\"}}";
+           String body=java.util.Arrays.asList("error","validation").contains(scenario)?
+                  "[{\"_1\":2},\"data\",{\"_3\":4},\"status\",\"error\"]\n":
+                  java.util.Arrays.asList("unknown","unknownAccepted","challenge").contains(scenario)?"<html>fixture</html>":
+                  "malformed".equals(scenario)?"[{\"_1\":99},\"data\"]":
+                  "otherRedirect".equals(scenario)?"[{\"_1\":2,\"_3\":4},\"redirect\",\"/login\",\"status\",302]\n":
+                  java.util.Arrays.asList("redirect","noContent").contains(scenario)?"":
+                  "[{\"_1\":2},\"data\",{\"_3\":4},\"status\",\"success\"]\n";
            return new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8));
          }
          if("storage.mebuki.moe".equals(host)){imageReads.incrementAndGet();return new ByteArrayInputStream(jpg);}
          String body;
          if("/api/trial/trending".equals(path))body=CATALOG;
          else if("/api/auth/get-session".equals(path)){
-           check(COOKIE.equals(getRequestProperty("Cookie")),"unexpected session cookie");sessionReads.incrementAndGet();
+           check(readCookie.equals(getRequestProperty("Cookie")),"unexpected session cookie");sessionReads.incrementAndGet();
            body=expired?"null":"{\"user\":{},\"session\":{}}";
          }else if(path.matches("/api/thread/fixture(123|456)/messages\\?initial=1")){
-           check(COOKIE.equals(getRequestProperty("Cookie")),"unexpected read cookie");threadReads.incrementAndGet();lastRoute=path;body=FIXTURE;
+           check(readCookie.equals(getRequestProperty("Cookie")),"unexpected read cookie");threadReads.incrementAndGet();lastRoute=path;body=FIXTURE;
            if(!added.isEmpty()){
              body=body.replace("\"messageCount\":2","\"messageCount\":"+(added.contains("fixture-other")?4:3));
              body=body.replace("2026-11-25T15:00:00.000Z","2026-11-25T15:05:00.000Z");
@@ -180,11 +203,39 @@ public final class MebukiPostGate extends Instrumentation {
    Bundle result=new Bundle();Context ctx=getTargetContext();android.content.SharedPreferences prefs=ctx.getSharedPreferences(STORE,0);
    try{
      check(prefs.getString(KEY,"").isEmpty(),"isolated test must not have real cookie");
-     setupNetwork();check(prefs.edit().putString(KEY,COOKIE).commit(),"synthetic cookie");
+     setupNetwork();
+     if(scopeOnly){
+       android.webkit.CookieManager cm=android.webkit.CookieManager.getInstance();
+       String root="https://mebuki.moe/",target=root+"t/fixture123.data";
+       // The isolated AVD has never been used with real account credentials.
+       // Set only named synthetic cookies and restore the same names at exit.
+       cm.setCookie(root,"beta22_scope_root=synthetic_root; Path=/; Secure; HttpOnly");
+       cm.setCookie(target,"beta22_scope_action=synthetic_action; Path=/t/fixture123.data; Secure; HttpOnly");
+       cm.flush();
+       readCookie=cm.getCookie(root);actionCookie=cm.getCookie(target);
+       check(readCookie!=null&&readCookie.contains("beta22_scope_root=synthetic_root")&&!readCookie.contains("beta22_scope_action="),"root scope");
+       check(actionCookie!=null&&actionCookie.contains("beta22_scope_root=synthetic_root")&&actionCookie.contains("beta22_scope_action=synthetic_action"),"action scope");
+     }
+     check(prefs.edit().putString(KEY,readCookie).commit(),"synthetic cookie");
      Intent i=new Intent().setClassName(PKG,PKG.replace(".morphe","")+".MainActivity").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK);
      startActivitySync(i);Thread.sleep(1600);press("http://127.0.0.1:18765/mebuki/",7000);await("Fixture first",8000);
      String catalog=raw("/mebuki/futaba.php?mode=cat");java.util.regex.Matcher m=java.util.regex.Pattern.compile("res/([0-9]{13})[.]htm").matcher(catalog);check(m.find(),"catalog ID");
      String id=m.group(1),path="/mebuki/res/"+id+".htm";byte[] req=request(id,expectedContent);
+     if(scopeOnly){
+       String res=send(req,false);
+       check(res.contains("\"thisno\":"+number(id,3))&&accepted==1,"scoped cookie request accepted");
+       android.content.SharedPreferences diag=ctx.getSharedPreferences("futatabi_mebuki_post_diagnostic",0);
+       check("ACTION_SCOPED".equals(diag.getString("scope",""))&&diag.getBoolean("confirmed",false),"scope diagnosis");
+       // A path cookie with the same name but a different value must not be forwarded.
+       android.webkit.CookieManager cm=android.webkit.CookieManager.getInstance();
+       cm.setCookie("https://mebuki.moe/t/fixture123.data","beta22_scope_root=synthetic_conflict; Path=/t/fixture123.data; Secure; HttpOnly");cm.flush();
+       added="";int prior=submissions;
+       noSuccess(send(req,false),"conflicting path cookie");
+       check(submissions==prior&&"ACTION_UNAVAILABLE".equals(diag.getString("scope","")),"conflicting scope stopped before POST");
+       result.putBoolean("scopedCookieAccepted",true);result.putBoolean("conflictingCookieDenied",true);
+       result.putString("result","PASS actual Android CookieManager path and HttpOnly scope, conflict denied");
+       return;
+     }
      if(baselineTrace){
        press("Fixture first",3000);await("reply fixture",12000);
        android.util.Log.i("MebukiPostGate","TRACE_READY");
@@ -205,27 +256,58 @@ public final class MebukiPostGate extends Instrumentation {
      result.putBoolean("stockLoginNotice",true);
      prefs.edit().putString(KEY,COOKIE).commit();Thread.sleep(2000);compose(expectedContent);
      long deadline=SystemClock.uptimeMillis()+15000;while(submissions==0&&SystemClock.uptimeMillis()<deadline)Thread.sleep(200);
-     check(submissions==1,"stock button reached official mock exactly once");Thread.sleep(1800);
+     check(submissions==1&&accepted==1,"stock button reached and accepted by mock exactly once");Thread.sleep(1800);
      String html=raw(path);check(html.contains(expectedContent)&&html.contains("No."+number(id,3)),"native number readback");
      result.putString("expectedThisno",number(id,3));result.putBoolean("stockMockPost",true);
-     // Each raw test resets only synthetic upstream state. No repeat of an actual request.
-     for(String mode:new String[]{"error","unknown","absent","ambiguous","rate","forbidden","unauthorized"}){
-       added="";scenario=mode;int before=submissions;String res=send(req,false);
+     android.content.SharedPreferences diagnostic=ctx.getSharedPreferences("futatabi_mebuki_post_diagnostic",0);
+     check(diagnostic.getBoolean("confirmed",false)&&"ROUTER_DATA".equals(diagnostic.getString("response","")),"confirmed diag");
+     String[][] negatives={
+       {"error","ROUTER_ERROR","NOT_CHECKED"},{"unknown","HTML","NO_NEW_POSTS"},
+       {"absent","ROUTER_DATA","NO_NEW_POSTS"},{"ambiguous","ROUTER_DATA","MULTIPLE_OWN_POSTS"},
+       {"rate","HTTP_ERROR","NOT_CHECKED"},{"forbidden","HTTP_ERROR","NOT_CHECKED"},
+       {"unauthorized","HTTP_ERROR","NOT_CHECKED"},{"validation","ROUTER_ERROR","NOT_CHECKED"},
+       {"challenge","CHALLENGE","NOT_CHECKED"},{"malformed","MALFORMED","NO_NEW_POSTS"},
+       {"otherRedirect","OTHER_REDIRECT","NOT_CHECKED"},{"bodyMismatch","ROUTER_DATA","BODY_MISMATCH"},
+       {"noOwn","ROUTER_DATA","NO_OWN_POST"},{"readFailure","ROUTER_DATA","NOT_CHECKED"},
+       {"unknownAccepted","HTML","MATCHED"}
+     };
+     for(String[] test:negatives){
+       String mode=test[0];added="";scenario=mode;afterReadFails=false;
+       int before=submissions;String res=send(req,false);
        check(submissions==before+1,"one mock call "+mode);noSuccess(res,mode);
-       if(mode.equals("rate"))check(res.contains("\u6295\u7a3f\u5236\u9650"),"rate explanation");
-       if(mode.equals("unauthorized"))check(res.contains("\u30ed\u30b0\u30a4\u30f3"),"401 explanation");
-       if(mode.equals("forbidden"))check(res.contains("\u62d2\u5426"),"403 explanation");
+       check(test[1].equals(diagnostic.getString("response","")),"diagnostic response "+mode);
+       check(test[2].equals(diagnostic.getString("match","")),"diagnostic match "+mode);
+       check(!diagnostic.getBoolean("confirmed",false),"diagnostic not confirmed "+mode);
+       if(mode.equals("readFailure"))check("HTTP_OTHER".equals(diagnostic.getString("after","")),"after read status");
      }
-     result.putInt("negativeActionCases",7);
-     added="";scenario="success";expectedParent="fixture-reply";expectedContent="quoted fixture";
+     afterReadFails=false;
+     result.putInt("negativeActionCases",negatives.length);
+     for(String mode:new String[]{"redirect","noContent"}){
+       added="";scenario=mode;int prior=accepted;
+       String res=send(req,false);
+       check(accepted==prior+1&&res.contains("\"thisno\":"+number(id,3)),"confirmed "+mode);
+     }
+     result.putBoolean("redirectAndNoContent",true);
+     added="";scenario="success";expectedParent="fixture-reply";expectedContent="quoted fixture\nsecond line";
      String quoted=send(request(id,">No."+number(id,1)+"\n"+expectedContent),false);
      check(quoted.contains("\"thisno\":"+number(id,3)),"quoted reply number");
      result.putBoolean("quoteMapping",true);
      check(raw(path).contains("&gt;No."+number(id,1)),"native quote readback");
-     result.putString("result","PASS stock UI, authenticated mock action, number mapping, no-session, expired, external and uncertain cases");
+     check(diagnostic.getBoolean("confirmed",false)&&"MATCHED".equals(diagnostic.getString("match","")),"quote confirmed diagnostic");
+     String persisted=diagnostic.getAll().toString();
+     check(!persisted.contains(COOKIE)&&!persisted.contains(expectedContent)&&!persisted.contains("fixture123")&&!persisted.contains("fixture-reply"),"diagnostic contains only metadata");
+     result.putBoolean("diagnosticsRedacted",true);
+     result.putInt("mockAccepted",accepted);
+     result.putString("result","PASS stock UI, browser multipart order, real router wire fixtures, confirmed mock acceptance and diagnostic cases");
    }catch(Throwable ex){result.putString("failure",ex.getClass().getSimpleName()+": "+ex.getMessage());}
    finally{
-     if(COOKIE.equals(prefs.getString(KEY,"")))prefs.edit().remove(KEY).commit();
+     if(readCookie.equals(prefs.getString(KEY,"")))prefs.edit().remove(KEY).commit();
+     if(scopeOnly){
+       android.webkit.CookieManager cm=android.webkit.CookieManager.getInstance();
+       cm.setCookie("https://mebuki.moe/","beta22_scope_root=; Max-Age=0; Path=/; Secure; HttpOnly");
+       cm.setCookie("https://mebuki.moe/t/fixture123.data","beta22_scope_root=; Max-Age=0; Path=/t/fixture123.data; Secure; HttpOnly");
+       cm.setCookie("https://mebuki.moe/t/fixture123.data","beta22_scope_action=; Max-Age=0; Path=/t/fixture123.data; Secure; HttpOnly");cm.flush();
+     }
      result.putInt("mockPosts",submissions);finish(result.containsKey("failure")?0:-1,result);
    }
  }

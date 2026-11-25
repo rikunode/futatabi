@@ -38,12 +38,12 @@ public final class FutatabiHomeActivity extends Activity {
     private static final String STORE = "futatabi_extension_private";
     private static final int CHOOSE_IMAGE = 12;
     private static final int MEBUKI_LOGIN = 13;
+    private static final int AIMOGE_LOGIN = 14;
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private LinearLayout root;
     private EditText bodyField, deleteKeyField;
     private TextView notice, count;
     private String threadId = "";
-    private boolean awaitingAimogeBrowser;
     private final List<Uri> attached = new ArrayList<>();
 
     private static final class Response {
@@ -56,13 +56,6 @@ public final class FutatabiHomeActivity extends Activity {
         super.onCreate(state);
         setTitle("futatabi");
         home();
-    }
-    @Override protected void onResume() {
-        super.onResume();
-        if (awaitingAimogeBrowser) {
-            awaitingAimogeBrowser = false;
-            home();
-        }
     }
     @Override protected void onDestroy() {
         io.shutdownNow();
@@ -202,11 +195,11 @@ public final class FutatabiHomeActivity extends Activity {
                     }
                     try {
                         String url = new JSONObject(result.body).getString("authorizationUrl");
-                        if (!url.startsWith("https://")) throw new IllegalArgumentException("Invalid auth URL");
-                        awaitingAimogeBrowser = true;
-                        try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); }
-                        catch (RuntimeException ex) { awaitingAimogeBrowser = false; throw ex; }
-                        updateNotice("ブラウザの承認後、この画面に戻ってください。");
+                        if (AimogeLoginFlow.page(url) != AimogeLoginFlow.Page.OFFICIAL)
+                            throw new IllegalArgumentException("Invalid auth URL");
+                        Intent login = new Intent(this, AimogeLoginActivity.class);
+                        login.putExtra(AimogeLoginActivity.AUTH_URL, url);
+                        startActivityForResult(login, AIMOGE_LOGIN);
                     } catch (Exception ex) { updateNotice("認証URLを開けませんでした"); }
                 });
     }
@@ -320,7 +313,7 @@ public final class FutatabiHomeActivity extends Activity {
 
     @Override protected void onActivityResult(int code, int result, Intent data) {
         super.onActivityResult(code, result, data);
-        if (code == MEBUKI_LOGIN) {
+        if (code == MEBUKI_LOGIN || code == AIMOGE_LOGIN) {
             home(); // Revalidate the saved session when the owner returns.
             return;
         }

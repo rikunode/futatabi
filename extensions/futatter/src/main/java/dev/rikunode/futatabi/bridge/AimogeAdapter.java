@@ -169,7 +169,7 @@ final class AimogeAdapter {
             html.append("<span class='csb'>無念</span>Name<span class='cnm'>としあき</span>")
                     .append("<span class='cnw'>").append(escape(post.optString("createdAt", "")))
                     .append("</span><span class='cno'>No.").append(postId).append("</span>")
-                    .append("<blockquote>").append(escape(post.optString("body", "")))
+                    .append("<blockquote>").append(FutabaQuoteMarkup.render(escape(post.optString("body", ""))))
                     .append("</blockquote>");
             if (i > 0) html.append("</td></tr></table>");
         }

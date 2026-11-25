@@ -31,8 +31,10 @@ final class MebukiAdapter {
             if ("/mebuki/".equals(path) || ("/mebuki/futaba.php".equals(path) &&
                     BridgeServer.hasCatalogMode(rawPath)))
                 return BridgeServer.BridgeResponse.html(catalog());
-            if (path.matches("/mebuki/res/[0-9]{13}\\.htm"))
-                return BridgeServer.BridgeResponse.text(403, "Thread reading requires a verified signed-in contract");
+            if (path.matches("/mebuki/res/[0-9]{13}\\.htm")) {
+                String id = path.substring("/mebuki/res/".length(), path.length() - 4);
+                return BridgeServer.BridgeResponse.html(unavailableThread(id));
+            }
             if (path.matches("/mebuki/(thumb|cat|src)/[0-9]{13}s?\\.jpg")) {
                 String id = path.substring(path.lastIndexOf('/') + 1, path.lastIndexOf('/') + 14);
                 String remote = index.getString("img." + id, null);
@@ -88,6 +90,19 @@ final class MebukiAdapter {
         }
         html.append("</tr></table></body></html>");
         return html.toString().getBytes(SJIS);
+    }
+
+    // Local diagnostic document, not a real upstream post or proof of authentication.
+    static byte[] unavailableThread(String id) {
+        if (!id.matches("[0-9]{13}")) throw new IllegalArgumentException("Invalid thread ID");
+        return ("<!DOCTYPE html><html><head><meta charset='Shift_JIS'>"
+                + "<title>futatabi notice</title></head><body><div class='thre' data-res='" + id + "'>"
+                + "<span class='csb'>futatabi</span>Name <span class='cnm'>アプリからの案内</span>"
+                + "<span class='cnw'>-</span><span class='cno'>No." + id + "</span>"
+                + "<blockquote>めぶきのスレ本文は現在取得できません。<br>"
+                + "拡張ホームのめぶきログインで認証・保存を確認してください。<br>"
+                + "認証済み本文の変換は未対応です。"
+                + "</blockquote></div></body></html>").getBytes(SJIS);
     }
 
     private byte[] fetchImage(String url) throws Exception {

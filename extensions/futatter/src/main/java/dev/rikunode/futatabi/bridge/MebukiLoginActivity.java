@@ -18,7 +18,7 @@ import org.json.JSONObject;
 
 /**
  * Owner-operated Mebuki login WebView. No real login is executed automatically.
- * Credentials are copied only after an explicit session-check action, and never logged.
+ * Credentials are copied only after an owner-operated OAuth return or explicit check, and never logged.
  * Cookie attributes/expiry are not exposed by CookieManager.getCookie().
  */
 public final class MebukiLoginActivity extends Activity {
@@ -27,7 +27,7 @@ public final class MebukiLoginActivity extends Activity {
     private WebView browser;
     private TextView status, navigation;
     private Button check, erase, inspect, cancel;
-    private boolean busy, pageFailed;
+    private boolean busy, pageFailed, providerVisited;
     private MebukiLoginDiagnostics diagnostics;
 
     @Override public void onCreate(Bundle saved) {
@@ -63,9 +63,9 @@ public final class MebukiLoginActivity extends Activity {
         layout.addView(details, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
         status = new TextView(this);
-        status.setText("対応対象：X／Discord。Googleは対象外。本人ログイン後に保存を押してください。");
-        status.setPadding(20, 16, 20, 16);
-        controls.addView(status);
+        status.setText("X／Discordで認証後、自動確認・保存。手動確認は管理欄から。");
+        status.setPadding(12, 6, 12, 6);
+        layout.addView(status, 1);
 
         navigation = new TextView(this);
         navigation.setText("公式サイトを読み込み中…");
@@ -96,6 +96,7 @@ public final class MebukiLoginActivity extends Activity {
         cancel.setText("認証を中止してめぶきへ戻る");
         cancel.setOnClickListener(view -> {
             if (busy || browser == null) return;
+            providerVisited = false;
             browser.stopLoading();
             status.setText("中止操作：公式サイトへ戻ります。保存済み認証は変更しません。");
             browser.loadUrl(SITE);
@@ -153,11 +154,23 @@ public final class MebukiLoginActivity extends Activity {
             @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap icon) {
                 pageFailed = false;
                 if (diagnostics != null) diagnostics.event("page_started", url, "");
+                MebukiLoginFlow.Page page = classify(Uri.parse(url));
+                if (page == MebukiLoginFlow.Page.X || page == MebukiLoginFlow.Page.DISCORD)
+                    providerVisited = true;
+                if (page == MebukiLoginFlow.Page.ERROR_RETURN) providerVisited = false;
                 showNavigation(url, true);
             }
             @Override public void onPageFinished(WebView view, String url) {
                 if (diagnostics != null) diagnostics.snapshot(view, "page_finished");
-                if (!pageFailed && url.equals(view.getUrl())) showNavigation(url, false);
+                if (!pageFailed && url.equals(view.getUrl())) {
+                    showNavigation(url, false);
+                    MebukiLoginFlow.Page page = classify(Uri.parse(url));
+                    if (providerVisited && !busy && (page == MebukiLoginFlow.Page.SITE
+                            || page == MebukiLoginFlow.Page.CALLBACK)) {
+                        providerVisited = false;
+                        verifyAndStore();
+                    }
+                }
             }
             @Override public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
                 if (request.isForMainFrame()) {
@@ -201,7 +214,7 @@ public final class MebukiLoginActivity extends Activity {
             case GOOGLE_UNSUPPORTED: label = "Googleは対象外です。資格情報を入力せず戻ってください。"; break;
             case CALLBACK: label = "めぶきへのcallbackを検出。認証成功は未確認。"; break;
             case ERROR_RETURN: label = "めぶきから認証エラーの戻りを検出。成功は未確認。"; break;
-            case SITE: label = "めぶき公式サイト：ログイン後は保存ボタンで検証してください。"; break;
+            case SITE: label = "めぶき公式サイト：自動確認が完了しない場合は管理欄で手動確認。"; break;
             default: label = "未確認のページ：資格情報を入力せず、必要に応じて戻ってください。";
         }
         navigation.setText((loading ? "読み込み中：" : "") + label);
@@ -249,6 +262,11 @@ public final class MebukiLoginActivity extends Activity {
                 status.setText(persisted ? "認証済みセッションを端末内に保存しました。" :
                         state == MebukiSession.State.AUTHENTICATED ? "認証済みですが端末への保存に失敗しました。" :
                         "保存未完了：" + state.name());
+                if (persisted) {
+                    android.widget.Toast.makeText(this, "めぶきの認証を保存しました", android.widget.Toast.LENGTH_LONG).show();
+                    setResult(RESULT_OK);
+                    finish();
+                }
             });
         }, "futatabi-mebuki-session-check").start();
     }

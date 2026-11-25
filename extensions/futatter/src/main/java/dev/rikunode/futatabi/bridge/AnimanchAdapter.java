@@ -190,7 +190,7 @@ final class AnimanchAdapter {
                             .append("<img src='/animanch/thumb/").append(photoId).append("s.jpg' width=50 height=50></a>");
                 }
             }
-            html.append("<blockquote>").append(escape(text).replace("\n", "<br>"))
+            html.append("<blockquote>").append(FutabaQuoteMarkup.render(escape(text).replace("\n", "<br>")))
                     .append("</blockquote>");
             if (index > 0) html.append("</td></tr></table>");
             index++;

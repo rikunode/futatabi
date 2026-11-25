@@ -1,7 +1,7 @@
 {
-    "created_at":  "2026-11-25T20:42:25",
-    "description":  "v0.4.0-beta.14: Direct protected replies from thread pencil on Aimoge and Animanch; exact target and stock UI verified in isolated AVD. Owner submission pending.",
-    "download_url":  "https://github.com/rikunode/futatabi/releases/download/v0.4.0-beta.14/futatabi-patches-v0.4.0-beta.14.mpp",
+    "created_at":  "2026-11-25T21:17:10",
+    "description":  "v0.4.0-beta.15: Readable post results, reply target selection, plain errors, and Mebuki viewport. Auto return with cache invalidation; stock refresh remains manual.",
+    "download_url":  "https://github.com/rikunode/futatabi/releases/download/v0.4.0-beta.15/futatabi-patches-v0.4.0-beta.15.mpp",
     "signature_download_url":  "",
-    "version":  "0.4.0-beta.14"
+    "version":  "0.4.0-beta.15"
 }

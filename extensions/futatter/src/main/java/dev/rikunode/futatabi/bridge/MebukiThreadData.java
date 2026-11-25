@@ -12,19 +12,23 @@ final class MebukiThreadData {
     final List<String> images;
     final int count;
     private final List<NativePost> posts;
+    private final long timestamp;
     private static final class NativePost {
-        final String date, body, image;
+        final String id, date, body, image, replyTo;
+        final boolean author, deleted;
         final Integer parent;
-        NativePost(String date, String body, String image, Integer parent) {
-            this.date=date;this.body=body;this.image=image;this.parent=parent;
+        NativePost(String id, String date, String body, String image, Integer parent, String replyTo, boolean author, boolean deleted) {
+            this.id=id;this.date=date;this.body=body;this.image=image;this.parent=parent;
+            this.replyTo=replyTo;this.author=author;this.deleted=deleted;
         }
     }
 
-    private MebukiThreadData(String html, List<String> images, int count, List<NativePost> posts) {
+    private MebukiThreadData(String html, List<String> images, int count, List<NativePost> posts, long timestamp) {
         this.html = html;
         this.images = java.util.Collections.unmodifiableList(images);
         this.count = count;
         this.posts = posts;
+        this.timestamp = timestamp;
     }
 
     private static IllegalArgumentException invalid() {
@@ -49,7 +53,7 @@ final class MebukiThreadData {
     }
     static MebukiThreadData convert(String stream) throws Exception {
         Map<?,?> root = object(MebukiTurboStream.decode(stream));
-        MebukiTurboStream.dateMillis(string(root.get("timestamp")));
+        long timestamp = MebukiTurboStream.dateMillis(string(root.get("timestamp")));
         Object mc = root.get("messageCount");
         if (!(mc instanceof Long)) throw invalid();
         long expected = (Long)mc;
@@ -106,22 +110,56 @@ final class MebukiThreadData {
                     } else out.append("<p class='meta'>\u6dfb\u4ed8\u3042\u308a\uff08\u516c\u5f0f\u30b5\u30a4\u30c8\u3067\u78ba\u8a8d\uff09</p>");
                 }
             }
-            nativePosts.add(new NativePost(date, deleted ? "\u524a\u9664\u30fb\u975e\u8868\u793a\u306e\u30ec\u30b9" : body,
-                    nativeImage, !deleted && to != null && to < i ? to : null));
+            nativePosts.add(new NativePost(string(post.get("id")), date, deleted ? "\u524a\u9664\u30fb\u975e\u8868\u793a\u306e\u30ec\u30b9" : body,
+                    nativeImage, !deleted && to != null && to < i ? to : null, parent,
+                    Boolean.TRUE.equals(post.get("isAuthor")), deleted));
             out.append("</article>");
             if (out.length()>2_000_000) throw invalid();
         }
-        return new MebukiThreadData(out.append("</div></body></html>").toString(), images, posts.size(), nativePosts);
+        return new MebukiThreadData(out.append("</div></body></html>").toString(), images, posts.size(), nativePosts, timestamp);
+    }
+
+    // Same beta.20 numbering: the OP is the virtual thread ID, replies are its
+    // ordinal offset. Never acknowledge a guessed count; compare actual IDs.
+    static String nativeNumber(String thread, int ordinal) {
+        if (!thread.matches("[1-9][0-9]{12}") || ordinal<0 || ordinal>=2000) throw invalid();
+        long base=Long.parseLong(thread);
+        return Long.toString(1000000000000L+(base-1000000000000L+ordinal)%9000000000000L);
+    }
+
+    String replyTarget(String thread,String number) {
+        for(int i=0;i<posts.size();i++){
+            NativePost p=posts.get(i);
+            if(nativeNumber(thread,i).equals(number)&&!p.deleted)return p.id;
+        }
+        return null;
+    }
+
+    boolean hasTarget(String id) {
+        for(NativePost p:posts)if(p.id.equals(id)&&!p.deleted)return true;
+        return false;
+    }
+
+    String confirmedReplyNumber(String thread,MebukiThreadData before,String content,String parent) {
+        if(posts.size()<=before.posts.size()||timestamp<before.timestamp)return null;
+        for(int i=0;i<before.posts.size();i++)
+            if(!before.posts.get(i).id.equals(posts.get(i).id))return null;
+        int match=-1;
+        for(int i=before.posts.size();i<posts.size();i++){
+            NativePost p=posts.get(i);
+            if(!p.author)continue;
+            // More than one new own post is ambiguous, even if only one text matches.
+            if(match!=-1||p.deleted||!p.body.equals(content)||!p.replyTo.equals(parent)||
+                    MebukiTurboStream.dateMillis(p.date)<before.timestamp)return null;
+            match=i;
+        }
+        return match<0?null:nativeNumber(thread,match);
     }
 
     /** Futaba compatibility structure used by the stock thread parser. */
     byte[] nativeHtml(String thread, java.util.function.Function<String,String> imageId) {
-        if (!thread.matches("[1-9][0-9]{12}")) throw invalid();
         String[] numbers = new String[posts.size()];
-        numbers[0] = thread;
-        long base=Long.parseLong(thread);
-        for (int i=1;i<numbers.length;i++)
-            numbers[i]=Long.toString(1000000000000L+(base-1000000000000L+i)%9000000000000L);
+        for (int i=0;i<numbers.length;i++) numbers[i]=nativeNumber(thread,i);
         java.time.format.DateTimeFormatter dates=java.time.format.DateTimeFormatter
                 .ofPattern("yy/MM/dd(E) HH:mm:ss",java.util.Locale.JAPANESE)
                 .withZone(java.time.ZoneId.of("Asia/Tokyo"));

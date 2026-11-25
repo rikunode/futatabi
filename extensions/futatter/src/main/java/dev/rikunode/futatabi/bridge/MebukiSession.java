@@ -30,7 +30,9 @@ final class MebukiSession {
         try {
             HttpURLConnection c = connect("/api/auth/get-session", cookie);
             try {
-                if (c.getResponseCode() != 200) return State.UNVERIFIED;
+                int status=c.getResponseCode();
+                if (status == 401) return State.ANONYMOUS;
+                if (status != 200) return State.UNVERIFIED;
                 try (InputStream in = c.getInputStream()) {
                     String body = new String(AimogeWriteClient.bounded(in, 64_000),
                             StandardCharsets.UTF_8).trim();
@@ -52,6 +54,7 @@ final class MebukiSession {
             throw new IllegalArgumentException("Unexpected host");
         HttpURLConnection c = (HttpURLConnection) url.openConnection();
         c.setInstanceFollowRedirects(false);
+        c.setUseCaches(false);
         c.setConnectTimeout(7000);
         c.setReadTimeout(8000);
         c.setRequestProperty("Accept", "application/json");

@@ -469,10 +469,13 @@ public class FutatabiHomeActivity extends Activity {
                 body.put("showThreadOwner", threadOwner.isChecked());
             } catch (Exception ex) { updateNotice("入力内容を作成できませんでした"); return; }
             remote("めぶきへレス投稿", "POST", "/ext/mebuki/reply", body, result -> {
-                if (result.status == 202) {
-                    startPage("送信応答を受信・成功未確定");
-                    addText("サーバーから応答がありましたが、投稿成功の正式な判定は未検証です。");
-                    action("ホームへ", this::home);
+                if (result.status == 201) {
+                    startPage("\u6295\u7a3f\u3092\u78ba\u8a8d\u3057\u307e\u3057\u305f");
+                    action("\u30db\u30fc\u30e0\u3078", this::home);
+                } else if (result.status == 202) {
+                    startPage("\u6295\u7a3f\u7d50\u679c\u672a\u78ba\u5b9a");
+                    addText("\u518d\u6295\u7a3f\u305b\u305a\u30b9\u30ec\u3092\u66f4\u65b0\u3057\u3066\u6295\u7a3f\u7d50\u679c\u3092\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002");
+                    action("\u30db\u30fc\u30e0\u3078", this::home);
                 } else updateNotice("レス送信できませんでした HTTP " + result.status);
             });
         });

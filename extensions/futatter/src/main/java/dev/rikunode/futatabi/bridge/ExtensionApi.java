@@ -97,7 +97,7 @@ final class ExtensionApi {
             if ("POST".equals(method) && "/ext/mebuki/reply".equals(path)) {
                 if (body.length == 0 || body.length > 24_000)
                     return BridgeServer.BridgeResponse.text(413, "Invalid request size");
-                return mebukiReplies.reply(new JSONObject(new String(body, StandardCharsets.UTF_8)));
+                return submitMebuki(new JSONObject(new String(body, StandardCharsets.UTF_8)));
             }
             return BridgeServer.BridgeResponse.text(404, "Not found");
         } catch (IllegalArgumentException ex) {
@@ -105,6 +105,10 @@ final class ExtensionApi {
         } catch (Exception ex) {
             return BridgeServer.BridgeResponse.text(503, "Request failed: " + ex.getClass().getSimpleName());
         }
+    }
+
+    BridgeServer.BridgeResponse submitMebuki(JSONObject payload) throws Exception {
+        return mebukiReplies.reply(payload);
     }
 
     private BridgeServer.BridgeResponse status() throws Exception {

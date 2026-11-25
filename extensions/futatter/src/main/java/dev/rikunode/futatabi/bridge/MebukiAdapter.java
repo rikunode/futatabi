@@ -25,13 +25,15 @@ final class MebukiAdapter {
         index = context.getSharedPreferences("futatabi_mebuki_index", Context.MODE_PRIVATE);
     }
 
-    BridgeServer.BridgeResponse route(String path) {
+    BridgeServer.BridgeResponse route(String rawPath) {
         try {
-            if ("/mebuki/".equals(path) || "/mebuki/futaba.php?mode=cat".equals(path))
+            String path = rawPath.split("\\?", 2)[0];
+            if ("/mebuki/".equals(path) || ("/mebuki/futaba.php".equals(path) &&
+                    BridgeServer.hasCatalogMode(rawPath)))
                 return BridgeServer.BridgeResponse.html(catalog());
             if (path.matches("/mebuki/res/[0-9]{13}\\.htm"))
                 return BridgeServer.BridgeResponse.text(403, "Thread reading requires a verified signed-in contract");
-            if (path.matches("/mebuki/(thumb|src)/[0-9]{13}s?\\.jpg")) {
+            if (path.matches("/mebuki/(thumb|cat|src)/[0-9]{13}s?\\.jpg")) {
                 String id = path.substring(path.lastIndexOf('/') + 1, path.lastIndexOf('/') + 14);
                 String remote = index.getString("img." + id, null);
                 if (remote == null) return BridgeServer.BridgeResponse.text(404, "Unknown image");

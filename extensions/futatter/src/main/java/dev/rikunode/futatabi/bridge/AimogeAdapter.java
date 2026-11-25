@@ -53,7 +53,7 @@ final class AimogeAdapter {
                 if (uuid == null) return BridgeServer.BridgeResponse.text(404, "Unknown thread");
                 return BridgeServer.BridgeResponse.html(thread(id, uuid));
             }
-            boolean thumb = path.matches("^/aimoge/thumb/[0-9]{13}s\\.jpg$");
+            boolean thumb = path.matches("^/aimoge/(thumb|cat)/[0-9]{13}s\\.jpg$");
             boolean original = path.matches("^/aimoge/src/[0-9]{13}\\.jpg$");
             if (thumb || original) {
                 String file = path.substring(path.lastIndexOf('/') + 1);

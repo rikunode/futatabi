@@ -49,6 +49,17 @@ final class BridgeServer {
         }
     }
 
+    // The stock client appends &sort=N to catalog URLs. Match the mode
+    // parameter, not the whole raw request target.
+    static boolean hasCatalogMode(String rawPath) {
+        int query = rawPath.indexOf('?');
+        if (query < 0) return false;
+        for (String parameter : rawPath.substring(query + 1).split("&")) {
+            if ("mode=cat".equals(parameter)) return true;
+        }
+        return false;
+    }
+
     private static String readLine(InputStream in, int limit) throws Exception {
         ByteArrayOutputStream b = new ByteArrayOutputStream();
         for (int i = 0; i < limit; i++) {

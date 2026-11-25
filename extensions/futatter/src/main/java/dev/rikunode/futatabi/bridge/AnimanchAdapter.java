@@ -66,9 +66,11 @@ final class AnimanchAdapter {
         for (int i = 0; i < imageLocks.length; i++) imageLocks[i] = new Object();
     }
 
-    BridgeServer.BridgeResponse route(String path) {
+    BridgeServer.BridgeResponse route(String rawPath) {
         try {
-            if (path.equals("/animanch/") || path.equals("/animanch/futaba.php?mode=cat"))
+            String path = rawPath.split("\\?", 2)[0];
+            if (path.equals("/animanch/") || (path.equals("/animanch/futaba.php") &&
+                    BridgeServer.hasCatalogMode(rawPath)))
                 return BridgeServer.BridgeResponse.html(catalog());
             if (path.matches("/animanch/res/[0-9]{13}\\.htm")) {
                 String id = path.substring("/animanch/res/".length(), path.length() - 4);
@@ -76,12 +78,12 @@ final class AnimanchAdapter {
                 if (board == null) return BridgeServer.BridgeResponse.text(404, "Unknown thread");
                 return BridgeServer.BridgeResponse.html(thread(id, board));
             }
-            if (path.matches("/animanch/(thumb|src)/[0-9]{13}s?\\.jpg")) {
+            if (path.matches("/animanch/(thumb|cat|src)/[0-9]{13}s?\\.jpg")) {
                 String name = path.substring(path.lastIndexOf('/') + 1);
                 String id = name.substring(0, 13);
                 String source = prefs.getString("image." + id, null);
                 if (source == null) return BridgeServer.BridgeResponse.text(404, "Unknown image");
-                return BridgeServer.BridgeResponse.image(image(source, path.contains("/thumb/")));
+                return BridgeServer.BridgeResponse.image(image(source, path.contains("/thumb/") || path.contains("/cat/")));
             }
             return BridgeServer.BridgeResponse.text(404, "Unknown route");
         } catch (Exception ex) {

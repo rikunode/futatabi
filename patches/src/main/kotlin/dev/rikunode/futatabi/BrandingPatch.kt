@@ -13,7 +13,7 @@ private object BrandingAssets
 val brandingPatch = resourcePatch(
     name = "futatabi branding",
     description = "Rename the app to futatabi and use its blue-to-teal launcher icon on black. Optional.",
-    default = false,
+    default = true,
 ) {
     compatibleWith(Compatibility(
         name = "futatter", packageName = "com.Nanasaki.ftutter", apkFileType = ApkFileType.APK,

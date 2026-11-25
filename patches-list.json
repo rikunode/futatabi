@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "0.4.0-beta.6",
+  "version": "0.4.0-beta.7",
   "patches": [
     {
       "name": "Block banner ads",
@@ -188,7 +188,7 @@
     {
       "name": "futatabi branding",
       "description": "Rename the app to futatabi and use its blue-to-teal launcher icon on black. Optional.",
-      "default": false,
+      "default": true,
       "category": null,
       "compatiblePackages": [
         {

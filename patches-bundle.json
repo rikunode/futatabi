@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-11-25T20:11:27",
-  "description": "v0.4.0-beta.13: Fix Animanch precheck and reply anchor mapping; redacted board HTTP diagnostics. Owner write confirmation pending.",
-  "download_url": "https://github.com/rikunode/futatabi/releases/download/v0.4.0-beta.13/futatabi-patches-v0.4.0-beta.13.mpp",
-  "signature_download_url": "",
-  "version": "0.4.0-beta.13"
+    "created_at":  "2026-11-25T20:42:25",
+    "description":  "v0.4.0-beta.14: Direct protected replies from thread pencil on Aimoge and Animanch; exact target and stock UI verified in isolated AVD. Owner submission pending.",
+    "download_url":  "https://github.com/rikunode/futatabi/releases/download/v0.4.0-beta.14/futatabi-patches-v0.4.0-beta.14.mpp",
+    "signature_download_url":  "",
+    "version":  "0.4.0-beta.14"
 }

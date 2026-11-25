@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-11-25T15:33:57",
-  "description": "v0.4.0-beta.6: Default dark mode (default ON), only seeds unset theme preferences; existing choices preserved. Mebuki login experimental: X/Discord only; authenticated thread conversion pending.",
-  "download_url": "https://github.com/rikunode/futatabi/releases/download/v0.4.0-beta.6/futatabi-patches-v0.4.0-beta.6.mpp",
+  "created_at": "2026-11-25T17:04:55",
+  "description": "v0.4.0-beta.7: Fix catalog sort-query and cat/ thumbnail routing; futatabi branding default ON. Mebuki login experimental; authenticated thread conversion pending.",
+  "download_url": "https://github.com/rikunode/futatabi/releases/download/v0.4.0-beta.7/futatabi-patches-v0.4.0-beta.7.mpp",
   "signature_download_url": "",
-  "version": "0.4.0-beta.6"
+  "version": "0.4.0-beta.7"
 }

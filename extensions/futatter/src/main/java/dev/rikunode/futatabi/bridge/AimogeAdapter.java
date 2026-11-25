@@ -124,6 +124,30 @@ final class AimogeAdapter {
         cache.remove(API + "/thread/" + uuid + "/public");
     }
 
+    String stockThreadUuid(String id) { return ids.threadUuid(id); }
+
+    /** Only an actual returned UUID/seq and official public number can acknowledge a stock post. */
+    synchronized String confirmedNumber(String thread, JSONObject accepted) throws Exception {
+        String post = java.util.UUID.fromString(accepted.getString("postId")).toString();
+        if (!thread.equals(accepted.getString("threadId")) || !"public".equals(accepted.getString("status")))
+            return null;
+        int seq = accepted.getInt("seq");
+        if (seq <= 0) return null;
+        String route = API + "/thread/" + thread + "/public";
+        cache.remove(route);
+        JSONArray posts = new JSONObject(new String(fetch(route, 0, true), StandardCharsets.UTF_8)).getJSONArray("posts");
+        for (int i=0;i<posts.length();i++) {
+            JSONObject p=posts.getJSONObject(i);
+            if (!post.equals(p.optString("id")) || seq!=p.optInt("seq",-1)
+                    || !thread.equals(p.optString("threadId"))) continue;
+            Object value=p.opt("postSequenceNo");
+            if (!(value instanceof Number)) return null;
+            String number=value.toString();
+            return number.matches("[1-9][0-9]{0,17}") ? number : null;
+        }
+        return null;
+    }
+
     JSONObject replyTargets(String uuid) throws Exception {
         java.util.UUID.fromString(uuid);
         ensureClientPolicy();

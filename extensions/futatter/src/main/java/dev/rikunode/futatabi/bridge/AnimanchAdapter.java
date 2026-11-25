@@ -200,6 +200,17 @@ final class AnimanchAdapter {
         return html.toString().getBytes(SJIS);
     }
 
+    String stockThreadId(String id) {
+        return id != null && id.matches("[0-9]{13}") ? prefs.getString("board."+id,null) : null;
+    }
+
+    String confirmedNumber(String id, JSONObject accepted) throws Exception {
+        String thread=stockThreadId(id), number=accepted.getString("number");
+        if(thread==null || !thread.equals(accepted.getString("thread")) ||
+                !accepted.optBoolean("attachmentUploaded") || !number.matches("[1-9][0-9]{0,5}")) return null;
+        return virtualPostId(id,number);
+    }
+
     private static String virtualPostId(String thread, String number) {
         return thread.substring(0, 7) + String.format(Locale.ROOT, "%06d", Integer.parseInt(number) % 1_000_000);
     }

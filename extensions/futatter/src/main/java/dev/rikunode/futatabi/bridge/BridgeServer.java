@@ -23,6 +23,7 @@ final class BridgeServer {
     private final AnimanchAdapter animanch;
     private final MebukiAdapter mebuki;
     private final ExtensionApi extension;
+    private final StockReply stockReply;
     private final ExecutorService workers = Executors.newFixedThreadPool(6);
 
     BridgeServer(Context context) {
@@ -30,6 +31,7 @@ final class BridgeServer {
         animanch = new AnimanchAdapter(context);
         mebuki = new MebukiAdapter(context);
         extension = new ExtensionApi(context, aimoge, animanch, mebuki);
+        stockReply = new StockReply(aimoge,animanch,extension);
     }
 
     void run() {
@@ -98,6 +100,10 @@ final class BridgeServer {
                 if (colon > 0) headers.put(line.substring(0, colon).trim().toLowerCase(java.util.Locale.ROOT),
                         line.substring(colon + 1).trim());
             }
+            boolean stockPost="POST".equals(method)&&StockReply.isPath(path);
+            if(stockPost&&(!StockReply.stockHeaders(headers)||!ProcessSocketAuth.ownsPeer(client))){
+                write(client.getOutputStream(),BridgeResponse.text(403,"Not authorized"));return;
+            }
             byte[] body = new byte[0];
             if ("POST".equals(method)) {
                 String size = headers.get("content-length");
@@ -119,6 +125,8 @@ final class BridgeServer {
             BridgeResponse response;
             if (path.startsWith("/ext/")) {
                 response = extension.route(method, path, headers, body);
+            } else if (stockPost) {
+                response = stockReply.submit(path,headers,body);
             } else if (!"GET".equals(method)) {
                 response = BridgeResponse.text(403, "Read only");
             } else if (path.startsWith("/aimoge/")) {
@@ -126,7 +134,7 @@ final class BridgeServer {
             } else if (path.startsWith("/animanch/")) {
                 response = animanch.route(path);
             } else if (path.startsWith("/mebuki/")) {
-                response = mebuki.route(path);
+                response = mebuki.route(path, ProcessSocketAuth.ownsPeer(client));
             } else {
                 response = BridgeResponse.text(404, "Not found");
             }

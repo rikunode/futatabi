@@ -199,7 +199,7 @@ final class ExtensionApi {
                 "<html><body>Login complete. Return to futatabi.</body></html>".getBytes(StandardCharsets.UTF_8));
     }
 
-    private BridgeServer.BridgeResponse submit(JSONObject payload) throws Exception {
+    BridgeServer.BridgeResponse submit(JSONObject payload) throws Exception {
         if (!loggedIn()) return BridgeServer.BridgeResponse.text(401, "Aimoge login required");
         String body = payload.optString("body", "");
         if (body.isEmpty() || body.codePointCount(0, body.length()) > 4000)
@@ -214,6 +214,10 @@ final class ExtensionApi {
         send.put("requestId", UUID.randomUUID().toString());
         send.put("body", body);
         send.put("deleteKey", deleteKey);
+        if(!threadId.isEmpty()){
+            if(payload.optBoolean("sage"))send.put("sage",true);
+            else if(payload.optBoolean("age"))send.put("age",true);
+        }
         JSONArray attachments = payload.optJSONArray("attachments");
         if (attachments != null && attachments.length() > (threadId.isEmpty() ? 1 : 3))
             return BridgeServer.BridgeResponse.text(400, "Too many attachments");

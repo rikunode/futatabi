@@ -11,11 +11,20 @@ final class MebukiThreadData {
     final String html;
     final List<String> images;
     final int count;
+    private final List<NativePost> posts;
+    private static final class NativePost {
+        final String date, body, image;
+        final Integer parent;
+        NativePost(String date, String body, String image, Integer parent) {
+            this.date=date;this.body=body;this.image=image;this.parent=parent;
+        }
+    }
 
-    private MebukiThreadData(String html, List<String> images, int count) {
+    private MebukiThreadData(String html, List<String> images, int count, List<NativePost> posts) {
         this.html = html;
         this.images = java.util.Collections.unmodifiableList(images);
         this.count = count;
+        this.posts = posts;
     }
 
     private static IllegalArgumentException invalid() {
@@ -53,6 +62,7 @@ final class MebukiThreadData {
             if (id.isEmpty() || id.length()>128 || numbers.put(id,i)!=null) throw invalid();
         }
         List<String> images = new ArrayList<>();
+        List<NativePost> nativePosts = new ArrayList<>();
         StringBuilder out = new StringBuilder("<!doctype html><html><head><meta charset='UTF-8'>"
                 + "<meta name='viewport' content='width=device-width,initial-scale=1'>"
                 + "<meta http-equiv='Content-Security-Policy' content=\"default-src 'none'; style-src 'unsafe-inline'\">"
@@ -82,6 +92,7 @@ final class MebukiThreadData {
             out.append("<blockquote>").append(deleted ? "\u524a\u9664\u30fb\u975e\u8868\u793a\u306e\u30ec\u30b9" :
                     FutabaQuoteMarkup.render(esc(body).replace("\r\n","\n").replace("\r","\n").replace("\n","<br>")))
                     .append("</blockquote>");
+            String nativeImage = null;
             if (!deleted && post.get("attachments") != null) {
                 List<?> attachments = array(post.get("attachments"));
                 if (attachments.size()>32) throw invalid();
@@ -91,13 +102,61 @@ final class MebukiThreadData {
                         out.append("<p><a href='https://futatabi.invalid/attachment/")
                                 .append(images.size()).append("'>\u753b\u50cf\u3092\u8868\u793a</a></p>");
                         images.add(image);
+                        if (nativeImage == null) nativeImage = image;
                     } else out.append("<p class='meta'>\u6dfb\u4ed8\u3042\u308a\uff08\u516c\u5f0f\u30b5\u30a4\u30c8\u3067\u78ba\u8a8d\uff09</p>");
                 }
             }
+            nativePosts.add(new NativePost(date, deleted ? "\u524a\u9664\u30fb\u975e\u8868\u793a\u306e\u30ec\u30b9" : body,
+                    nativeImage, !deleted && to != null && to < i ? to : null));
             out.append("</article>");
             if (out.length()>2_000_000) throw invalid();
         }
-        return new MebukiThreadData(out.append("</div></body></html>").toString(), images, posts.size());
+        return new MebukiThreadData(out.append("</div></body></html>").toString(), images, posts.size(), nativePosts);
+    }
+
+    /** Futaba compatibility structure used by the stock thread parser. */
+    byte[] nativeHtml(String thread, java.util.function.Function<String,String> imageId) {
+        if (!thread.matches("[1-9][0-9]{12}")) throw invalid();
+        String[] numbers = new String[posts.size()];
+        numbers[0] = thread;
+        long base=Long.parseLong(thread);
+        for (int i=1;i<numbers.length;i++)
+            numbers[i]=Long.toString(1000000000000L+(base-1000000000000L+i)%9000000000000L);
+        java.time.format.DateTimeFormatter dates=java.time.format.DateTimeFormatter
+                .ofPattern("yy/MM/dd(E) HH:mm:ss",java.util.Locale.JAPANESE)
+                .withZone(java.time.ZoneId.of("Asia/Tokyo"));
+        StringBuilder h=new StringBuilder("<html><head><meta charset='Shift_JIS'></head><body><div class='thre' data-res='")
+                .append(thread).append("'>");
+        for(int i=0;i<posts.size();i++){
+            NativePost p=posts.get(i);
+            if(i>0)h.append("<table border=0><tr><td class=rts></td><td class=rtd><span id='delcheck")
+                    .append(numbers[i]).append("' class='rsc'>").append(i).append("</span>");
+            h.append("<span class='csb'>").append(i==0?"\u3081\u3076\u304d":"\u7121\u5ff5")
+                    .append("</span>Name <span class='cnm'>\u3068\u3057\u3042\u304d</span><span class='cnw'>")
+                    .append(dates.format(java.time.Instant.ofEpochMilli(MebukiTurboStream.dateMillis(p.date))))
+                    .append("</span><span class='cno'>No.").append(numbers[i]).append("</span>");
+            if(p.image!=null){
+                String id=imageId.apply(p.image);
+                if(id!=null)h.append("<a href='/mebuki/src/").append(id).append(".jpg'>").append(id)
+                        .append(".jpg</a><br><a href='/mebuki/src/").append(id)
+                        .append(".jpg'><img src='/mebuki/thumb/").append(id).append("s.jpg' width=50 height=50></a>");
+            }
+            String body=esc(p.body).replace("\r\n","\n").replace("\r","\n").replace("\n","<br>");
+            if(p.parent!=null)body="&gt;No."+numbers[p.parent]+"<br>"+body;
+            h.append("<blockquote>").append(FutabaQuoteMarkup.render(body)).append("</blockquote>");
+            if(i>0)h.append("</td></tr></table>");
+        }
+        h.append("</div></body></html>");
+        java.nio.charset.Charset sjis=java.nio.charset.Charset.forName("Shift_JIS");
+        java.nio.charset.CharsetEncoder encoder=sjis.newEncoder();
+        StringBuilder encoded=new StringBuilder();
+        for(int at=0;at<h.length();){
+            int cp=h.codePointAt(at);at+=Character.charCount(cp);
+            if(cp<128)encoded.append((char)cp);
+            else {String ch=new String(Character.toChars(cp));
+                if(encoder.canEncode(ch))encoded.append(ch);else encoded.append("&#").append(cp).append(';');}
+        }
+        return encoded.toString().getBytes(sjis);
     }
 
     // Mirrors the public utils Yu(filePath, "sm", createdAt), but only

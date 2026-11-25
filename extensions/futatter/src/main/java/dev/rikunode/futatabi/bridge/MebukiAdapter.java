@@ -20,12 +20,17 @@ final class MebukiAdapter {
     private static final String STORAGE = "https://storage.mebuki.moe/";
     private static final Charset SJIS = Charset.forName("Shift_JIS");
     private final SharedPreferences index;
+    private final Context context;
+    private final java.util.LinkedHashMap<String,String> privateImages = new java.util.LinkedHashMap<>();
+    private String imageSession = "";
 
     MebukiAdapter(Context context) {
+        this.context = context;
         index = context.getSharedPreferences("futatabi_mebuki_index", Context.MODE_PRIVATE);
     }
 
-    BridgeServer.BridgeResponse route(String rawPath) {
+    BridgeServer.BridgeResponse route(String rawPath) { return route(rawPath,false); }
+    BridgeServer.BridgeResponse route(String rawPath, boolean internal) {
         try {
             String path = rawPath.split("\\?", 2)[0];
             if ("/mebuki/".equals(path) || ("/mebuki/futaba.php".equals(path) &&
@@ -33,11 +38,29 @@ final class MebukiAdapter {
                 return BridgeServer.BridgeResponse.html(catalog());
             if (path.matches("/mebuki/res/[0-9]{13}\\.htm")) {
                 String id = path.substring("/mebuki/res/".length(), path.length() - 4);
+                if (internal && MebukiSession.safeCookie(MebukiSession.saved(context))) {
+                    String cookie=MebukiSession.saved(context);
+                    try {
+                        MebukiThreadData data=readPrivateThread(context,id);
+                        byte[] html=data.nativeHtml(id,url->rememberPrivateImage(cookie,url));
+                        if(cookie.equals(MebukiSession.saved(context)))
+                            return BridgeServer.BridgeResponse.html(html);
+                    } catch(Exception ignored) { /* keep the explicit notice on any failure */ }
+                }
                 return BridgeServer.BridgeResponse.html(unavailableThread(id));
             }
             if (path.matches("/mebuki/(thumb|cat|src)/[0-9]{13}s?\\.jpg")) {
                 String id = path.substring(path.lastIndexOf('/') + 1, path.lastIndexOf('/') + 14);
                 String remote = index.getString("img." + id, null);
+                if (remote == null && internal) {
+                    String cookie=MebukiSession.saved(context);
+                    String candidate=privateImage(cookie,id);
+                    if(candidate!=null && MebukiSession.verify(cookie)==MebukiSession.State.AUTHENTICATED
+                            && cookie.equals(MebukiSession.saved(context))) {
+                        byte[] image=fetchImage(candidate);
+                        if(cookie.equals(MebukiSession.saved(context))) return BridgeServer.BridgeResponse.image(image);
+                    }
+                }
                 if (remote == null) return BridgeServer.BridgeResponse.text(404, "Unknown image");
                 return BridgeServer.BridgeResponse.image(fetchImage(remote));
             }
@@ -45,6 +68,25 @@ final class MebukiAdapter {
         } catch (Exception ex) {
             return BridgeServer.BridgeResponse.text(503, "Mebuki trial unavailable");
         }
+    }
+
+    private synchronized String rememberPrivateImage(String cookie,String url) {
+        if(!cookie.equals(MebukiSession.saved(context)))return null;
+        if(!cookie.equals(imageSession)){privateImages.clear();imageSession=cookie;}
+        try {
+            byte[] digest=MessageDigest.getInstance("SHA-256").digest(("private."+url).getBytes(StandardCharsets.UTF_8));
+            long n=java.nio.ByteBuffer.wrap(digest).getLong() & Long.MAX_VALUE;
+            String id=Long.toString(1000000000000L+n%9000000000000L);
+            if(index.contains("img."+id))return null;
+            String existing=privateImages.get(id);
+            if(existing!=null&&!existing.equals(url))return null;
+            if(privateImages.size()>=512&&existing==null)privateImages.remove(privateImages.keySet().iterator().next());
+            privateImages.put(id,url);return id;
+        }catch(Exception ex){return null;}
+    }
+    private synchronized String privateImage(String cookie,String id) {
+        if(!cookie.equals(imageSession)){privateImages.clear();imageSession=cookie;return null;}
+        return MebukiSession.safeCookie(cookie)?privateImages.get(id):null;
     }
 
     MebukiThreadData readPrivateThread(Context context, String id) throws Exception {

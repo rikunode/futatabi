@@ -1,7 +1,7 @@
 {
-    "created_at":  "2026-11-25T21:17:10",
-    "description":  "v0.4.0-beta.15: Readable post results, reply target selection, plain errors, and Mebuki viewport. Auto return with cache invalidation; stock refresh remains manual.",
-    "download_url":  "https://github.com/rikunode/futatabi/releases/download/v0.4.0-beta.15/futatabi-patches-v0.4.0-beta.15.mpp",
+    "created_at":  "2026-11-25T22:58:01",
+    "description":  "v0.4.0-beta.16: Stock quote markup and Mebuki login/read diagnostics. Stock composer and authenticated Mebuki reading remain pending.",
+    "download_url":  "https://github.com/rikunode/futatabi/releases/download/v0.4.0-beta.16/futatabi-patches-v0.4.0-beta.16.mpp",
     "signature_download_url":  "",
-    "version":  "0.4.0-beta.15"
+    "version":  "0.4.0-beta.16"
 }

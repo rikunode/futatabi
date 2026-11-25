@@ -267,6 +267,10 @@ public final class FutatabiHomeActivity extends Activity {
                 updateNotice("削除キーは1〜64文字で入力してください");
                 return;
             }
+            if (replyTo.isEmpty() && attached.isEmpty()) {
+                updateNotice("新規スレには画像が1枚必要です");
+                return;
+            }
             final List<Uri> picks = new ArrayList<>(attached);
             updateNotice("送信内容を準備中…");
             io.execute(() -> {

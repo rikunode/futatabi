@@ -30,6 +30,10 @@ final class AimogeWriteClient {
         JSONObject json() throws Exception { return new JSONObject(text); }
     }
 
+    Result get(String path) throws Exception {
+        return request("GET", path, null, null, null);
+    }
+
     Result post(String path, JSONObject body, String credential) throws Exception {
         return request("POST", path, body.toString().getBytes(StandardCharsets.UTF_8),
                 "application/json", credential);

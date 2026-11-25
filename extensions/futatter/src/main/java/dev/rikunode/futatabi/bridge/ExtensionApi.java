@@ -208,6 +208,8 @@ final class ExtensionApi {
         JSONArray attachments = payload.optJSONArray("attachments");
         if (attachments != null && attachments.length() > (threadId.isEmpty() ? 1 : 3))
             return BridgeServer.BridgeResponse.text(400, "Too many attachments");
+        if (threadId.isEmpty() && (attachments == null || attachments.length() == 0))
+            return BridgeServer.BridgeResponse.text(400, "New thread requires an image");
         JSONArray ids = new JSONArray();
         if (attachments != null) {
             for (int i = 0; i < attachments.length(); i++) {
@@ -223,6 +225,16 @@ final class ExtensionApi {
             else send.put("attachmentIds", ids);
         }
         String path = threadId.isEmpty() ? "/threads/aimg" : "/threads/" + threadId + "/posts";
+        // Obtain a fresh official challenge immediately before submission.
+        // The app credential is the documented x-aimg-token; no browser token
+        // or clearance cookie is copied or requested by the native client.
+        AimogeWriteClient.Result challenge = client.get("/altcha");
+        if (challenge.status != 200)
+            return BridgeServer.BridgeResponse.text(challenge.status, "ALTCHA challenge HTTP " + challenge.status);
+        try { send.put("altcha", AimogeProof.solve(challenge.json())); }
+        catch (Exception ex) {
+            return BridgeServer.BridgeResponse.text(503, "ALTCHA preparation failed: " + ex.getClass().getSimpleName());
+        }
         AimogeWriteClient.Result response = client.post(path, send, credential);
         if (response.status != 201)
             return BridgeServer.BridgeResponse.json(response.status, safeJson(response.text));

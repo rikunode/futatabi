@@ -102,10 +102,18 @@ public final class MebukiLoginActivity extends Activity {
             browser.loadUrl(SITE);
         });
         controls.addView(cancel);
+        Button external = new Button(this);
+        external.setText("通常ブラウザで公式サイトを開く");
+        external.setOnClickListener(view -> {
+            if (!busy) openOfficialBrowser();
+        });
+        controls.addView(external);
 
         browser = new WebView(this);
         WebSettings settings = browser.getSettings();
         settings.setJavaScriptEnabled(true); // The official Better Auth interface requires JS.
+        // Discord OAuth login loop: discord/discord-api-docs#5165.
+        settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
@@ -177,6 +185,10 @@ public final class MebukiLoginActivity extends Activity {
                     pageFailed = true;
                     if (diagnostics != null) diagnostics.event("network_error", request.getUrl().toString(), "code=" + error.getErrorCode());
                     navigation.setText("ページ通信エラー（" + error.getErrorCode() + "）。認証成功は未確認です。");
+                    status.setText(navigation.getText());
+                } else if (discordLoginRequest(view, request)) {
+                    status.setText("Discord 認証通信エラー（" + error.getErrorCode()
+                            + "）。認証は未確認です。");
                 }
             }
             @Override public void onReceivedHttpError(WebView view, WebResourceRequest request, android.webkit.WebResourceResponse response) {
@@ -184,6 +196,10 @@ public final class MebukiLoginActivity extends Activity {
                     pageFailed = true;
                     if (diagnostics != null) diagnostics.event("http_error", request.getUrl().toString(), "status=" + response.getStatusCode());
                     navigation.setText("ページHTTPエラー（" + response.getStatusCode() + "）。認証成功は未確認です。");
+                    status.setText(navigation.getText());
+                } else if (discordLoginRequest(view, request)) {
+                    status.setText("Discord 認証 HTTP " + response.getStatusCode()
+                            + "。追加認証が表示された場合は画面の指示に従ってください。");
                 }
             }
             @Override public void onReceivedSslError(WebView view, android.webkit.SslErrorHandler handler, android.net.http.SslError error) {
@@ -191,6 +207,7 @@ public final class MebukiLoginActivity extends Activity {
                 if (diagnostics != null) diagnostics.event("tls_error", view.getUrl(), "cancelled=true");
                 pageFailed = true;
                 navigation.setText("TLS証明書エラーで中止しました。認証成功は未確認です。");
+                status.setText(navigation.getText());
             }
         });
         layout.addView(browser, new LinearLayout.LayoutParams(
@@ -198,6 +215,43 @@ public final class MebukiLoginActivity extends Activity {
         setContentView(layout);
         layout.requestApplyInsets();
         browser.loadUrl(SITE);
+    }
+
+    private static boolean discordLoginRequest(WebView view, WebResourceRequest request) {
+        String current = view.getUrl();
+        if (current == null || classify(Uri.parse(current)) != MebukiLoginFlow.Page.DISCORD)
+            return false;
+        Uri uri = request.getUrl();
+        return MebukiLoginFlow.discordLoginPost(uri.getScheme(), uri.getHost(), uri.getPath(), request.getMethod());
+    }
+
+    // Browser-only fallback. The official browser owns its session;
+    // never copy a browser cookie or claim that this logs in the native app.
+    private void openOfficialBrowser() {
+        new android.app.AlertDialog.Builder(this)
+                .setMessage("公式サイトでのログイン・閲覧用です。ブラウザの認証はアプリへ取り込まれません。")
+                .setNegativeButton("キャンセル", null)
+                .setPositiveButton("開く", (dialog, which) -> {
+                    android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(SITE))
+                            .addCategory(android.content.Intent.CATEGORY_BROWSABLE).setPackage("com.android.chrome");
+                    android.content.Intent service = new android.content.Intent("android.support.customtabs.action.CustomTabsService")
+                            .setPackage("com.android.chrome");
+                    if (getPackageManager().resolveService(service, 0) != null) {
+                        Bundle extras = new Bundle();
+                        extras.putBinder("android.support.customtabs.extra.SESSION", null);
+                        extras.putInt("android.support.customtabs.extra.TITLE_VISIBILITY", 1);
+                        intent.putExtras(extras);
+                    }
+                    try { startActivity(intent); }
+                    catch (android.content.ActivityNotFoundException | SecurityException ex) {
+                        try {
+                            startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(SITE))
+                                    .addCategory(android.content.Intent.CATEGORY_BROWSABLE));
+                        } catch (android.content.ActivityNotFoundException | SecurityException unavailable) {
+                            status.setText("対応ブラウザがありません。");
+                        }
+                    }
+                }).show();
     }
 
     private static MebukiLoginFlow.Page classify(Uri uri) {
@@ -218,6 +272,7 @@ public final class MebukiLoginActivity extends Activity {
             default: label = "未確認のページ：資格情報を入力せず、必要に応じて戻ってください。";
         }
         navigation.setText((loading ? "読み込み中：" : "") + label);
+        if (page == MebukiLoginFlow.Page.ERROR_RETURN) status.setText(label);
     }
 
     private void setBusy(boolean value) {

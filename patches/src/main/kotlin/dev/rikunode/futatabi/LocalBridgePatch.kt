@@ -166,5 +166,24 @@ val bridgePatch = bytecodePatch(
             if-eqz v0, :originalTab
             return-void
         """, ExternalLabel("originalTab", tabImpl.instructions.first()))
+
+        // TabsNotifier._save writes flutter.opening via the stock Pigeon setString.
+        // Observe only after its original commit; never modify the preference or result.
+        val prefs = mutableClassDefByOrNull("Lg6/m;")
+            ?: throw PatchException("futatabi: shared preferences channel missing")
+        val setter = prefs.methods.singleOrNull {
+            it.name == "d" && it.parameterTypes.map { type -> type.toString() } ==
+                listOf("Lg6/c\$b;", "Ljava/lang/Object;", "LR5/a\$e;") && it.returnType == "V"
+        } ?: throw PatchException("futatabi: setString channel missing")
+        val setterImpl = setter.implementation ?: throw PatchException("futatabi: setString code missing")
+        if (setterImpl.registerCount != 7 || setterImpl.instructions.take(14).map { it.opcode } != listOf(
+                Opcode.NEW_INSTANCE, Opcode.INVOKE_DIRECT, Opcode.CHECK_CAST, Opcode.CONST_4,
+                Opcode.INVOKE_VIRTUAL, Opcode.MOVE_RESULT_OBJECT, Opcode.CHECK_CAST, Opcode.CONST_4,
+                Opcode.INVOKE_VIRTUAL, Opcode.MOVE_RESULT_OBJECT, Opcode.CHECK_CAST, Opcode.INVOKE_INTERFACE,
+                Opcode.MOVE_RESULT_OBJECT, Opcode.INVOKE_VIRTUAL))
+            throw PatchException("futatabi: setString signature mismatch")
+        setter.addInstructionsWithLabels(13, """
+            invoke-static {v2, v5, v4}, Ldev/rikunode/futatabi/bridge/MebukiAutoReader;->onSelectionSaved(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Boolean;)V
+        """)
     }
 }

@@ -25,6 +25,8 @@ public final class FutatabiProvider extends ContentProvider {
         if (context == null) return true;
         try {
             registerBoards(context);
+            if (context.getApplicationContext() instanceof android.app.Application)
+                MebukiAutoReader.install((android.app.Application) context.getApplicationContext());
         } catch (Exception ex) {
             Log.w(TAG, "Board registration skipped: " + ex.getClass().getSimpleName());
         }

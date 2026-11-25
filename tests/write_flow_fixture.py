@@ -90,9 +90,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/board/" + THREAD_BOARD + "/":
             html = (
                 "<html><body><article id='reslist'>"
-                "<li id='res1' class='list-group-item'><div class='resbody good1'>"
+                "<li id='res1' class='list-group-item'><span class='resposted'>26/11/25(Wed) 12:00:00</span><div class='resbody good1'>"
                 "<p>Mock Animanch first post</p></div></li>"
-                "<li id='res2' class='list-group-item'><div class='resbody good1'>"
+                "<li id='res2' class='list-group-item'><span class='resposted'>26/11/25(Wed) 12:00:00</span><div class='resbody good1'>"
                 "<p>Mock Animanch reply</p></div></li>"
                 "</article></body></html>"
             )

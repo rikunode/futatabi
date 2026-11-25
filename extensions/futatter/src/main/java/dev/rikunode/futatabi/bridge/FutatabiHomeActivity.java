@@ -43,6 +43,7 @@ public final class FutatabiHomeActivity extends Activity {
     private EditText bodyField, deleteKeyField;
     private TextView notice, count;
     private String threadId = "";
+    private boolean awaitingAimogeBrowser;
     private final List<Uri> attached = new ArrayList<>();
 
     private static final class Response {
@@ -55,6 +56,13 @@ public final class FutatabiHomeActivity extends Activity {
         super.onCreate(state);
         setTitle("futatabi");
         home();
+    }
+    @Override protected void onResume() {
+        super.onResume();
+        if (awaitingAimogeBrowser) {
+            awaitingAimogeBrowser = false;
+            home();
+        }
     }
     @Override protected void onDestroy() {
         io.shutdownNow();
@@ -195,7 +203,9 @@ public final class FutatabiHomeActivity extends Activity {
                     try {
                         String url = new JSONObject(result.body).getString("authorizationUrl");
                         if (!url.startsWith("https://")) throw new IllegalArgumentException("Invalid auth URL");
-                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+                        awaitingAimogeBrowser = true;
+                        try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); }
+                        catch (RuntimeException ex) { awaitingAimogeBrowser = false; throw ex; }
                         updateNotice("ブラウザの承認後、この画面に戻ってください。");
                     } catch (Exception ex) { updateNotice("認証URLを開けませんでした"); }
                 });

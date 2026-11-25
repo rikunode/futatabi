@@ -17,6 +17,12 @@ final class AimogeWriteClient {
     AimogeWriteClient() { this("https://api.nijiurachan.net"); }
     AimogeWriteClient(String baseUrl) { base = baseUrl; }
 
+    // DNS failure before the request body was written: the same PKCE exchange
+    // can be retried by reloading the callback after connectivity recovers.
+    static final class DnsUnavailableException extends java.io.IOException {
+        DnsUnavailableException() { super("DNS unavailable for api.nijiurachan.net"); }
+    }
+
     static final class Result {
         final int status;
         final String text;
@@ -54,7 +60,12 @@ final class AimogeWriteClient {
             conn.setFixedLengthStreamingMode(data.length);
         }
         try {
-            if (data != null) try (OutputStream out = conn.getOutputStream()) { out.write(data); }
+            if (data != null) {
+                OutputStream stream;
+                try { stream = conn.getOutputStream(); }
+                catch (java.net.UnknownHostException ex) { throw new DnsUnavailableException(); }
+                try (OutputStream out = stream) { out.write(data); }
+            }
             int status = conn.getResponseCode();
             if (status >= 300 && status < 400) throw new IllegalStateException("Unexpected redirect");
             try (InputStream in = status < 400 ? conn.getInputStream() : conn.getErrorStream()) {

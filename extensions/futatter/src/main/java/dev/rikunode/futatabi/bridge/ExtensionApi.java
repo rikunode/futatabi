@@ -125,14 +125,22 @@ final class ExtensionApi {
         request.put("state", state);
         request.put("codeChallenge", challenge);
         request.put("codeChallengeMethod", "S256");
-        AimogeWriteClient.Result upstream = client.post("/app-authorizations", request, null);
+        AimogeWriteClient.Result upstream;
+        try { upstream = client.post("/app-authorizations", request, null); }
+        catch (AimogeWriteClient.DnsUnavailableException ex) {
+            return BridgeServer.BridgeResponse.text(503, "Aimoge authorization start: DNS failed for api.nijiurachan.net. Check connectivity and retry login.");
+        }
         if (upstream.status != 201)
             return BridgeServer.BridgeResponse.json(upstream.status, safeJson(upstream.text));
         JSONObject reply = upstream.json();
         String url = reply.getString("authorizationUrl");
-        if (!url.startsWith("https://") || url.length() > 4096) throw new IllegalStateException("Invalid authorization URL");
-        prefs.edit().putString("pkce_verifier", verifier).putString("pkce_state", state)
-                .putLong("pkce_started", System.currentTimeMillis()).commit();
+        java.net.URI auth = new java.net.URI(url);
+        if (!"https".equals(auth.getScheme()) || !"nijiurachan.net".equalsIgnoreCase(auth.getHost())
+                || auth.getUserInfo() != null || (auth.getPort() != -1 && auth.getPort() != 443)
+                || url.length() > 4096) throw new IllegalStateException("Invalid authorization URL");
+        if (!prefs.edit().putString("pkce_verifier", verifier).putString("pkce_state", state)
+                .putLong("pkce_started", System.currentTimeMillis()).commit())
+            throw new IllegalStateException("PKCE state save failed");
         JSONObject result = new JSONObject();
         result.put("authorizationUrl", url);
         return BridgeServer.BridgeResponse.json(200, result.toString());
@@ -152,19 +160,32 @@ final class ExtensionApi {
         if (!code.matches("^[A-Za-z0-9_-]{43}$"))
             return BridgeServer.BridgeResponse.text(400, "Invalid code");
         String verifier = prefs.getString("pkce_verifier", "");
-        prefs.edit().remove("pkce_state").remove("pkce_verifier").remove("pkce_started").commit();
+        if (!verifier.matches("^[A-Za-z0-9._~-]{43,128}$"))
+            return BridgeServer.BridgeResponse.text(403, "Missing PKCE verifier");
         JSONObject request = new JSONObject();
         request.put("redirectUri", CALLBACK);
         request.put("code", code);
         request.put("codeVerifier", verifier);
-        AimogeWriteClient.Result response = client.post("/app-credentials", request, null);
+        AimogeWriteClient.Result response;
+        boolean retain = false;
+        try {
+            response = client.post("/app-credentials", request, null);
+        } catch (AimogeWriteClient.DnsUnavailableException ex) {
+            retain = true;
+            return BridgeServer.BridgeResponse.text(503,
+                    "Aimoge credential exchange: DNS failed for api.nijiurachan.net. Restore connectivity and reload this page before authorization expires. No credential was saved.");
+        } finally {
+            if (!retain && !prefs.edit().remove("pkce_state").remove("pkce_verifier")
+                    .remove("pkce_started").commit()) throw new IllegalStateException("PKCE state clear failed");
+        }
         if (response.status != 201) return BridgeServer.BridgeResponse.text(400, "Authorization could not be completed");
         JSONObject result = response.json();
         String credential = result.getString("credential");
         long expiry = java.time.Instant.parse(result.getString("expiresAt")).toEpochMilli();
         if (credential.isEmpty() || expiry <= System.currentTimeMillis())
             return BridgeServer.BridgeResponse.text(400, "Invalid credential result");
-        prefs.edit().putString("credential", credential).putLong("credential_expires", expiry).commit();
+        if (!prefs.edit().putString("credential", credential).putLong("credential_expires", expiry).commit())
+            return BridgeServer.BridgeResponse.text(503, "Credential save failed; start login again");
         return new BridgeServer.BridgeResponse(200, "text/html; charset=utf-8",
                 "<html><body>Login complete. Return to futatabi.</body></html>".getBytes(StandardCharsets.UTF_8));
     }

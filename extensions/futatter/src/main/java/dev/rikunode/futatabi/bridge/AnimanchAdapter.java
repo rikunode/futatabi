@@ -42,6 +42,7 @@ final class AnimanchAdapter {
     private static final Pattern BODY = Pattern.compile("class=['\"]card-body['\"][^>]*>(.*?)(?:<p\\s+class=['\"]threadCount)", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     private static final Pattern RES = Pattern.compile("<li\\s+id=['\"]res([0-9]+)['\"][^>]*>(.*?)</li>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     private static final Pattern RES_BODY = Pattern.compile("<div\\s+class=['\"]resbody[^'\"]*['\"][^>]*>(.*?)</div>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    private static final Pattern POSTED = Pattern.compile("<span\\s+class=['\"]resposted['\"][^>]*>(.*?)</span>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     private static final Pattern IMAGE = Pattern.compile("<img[^>]+src=['\"]([^'\"]+)['\"]", Pattern.CASE_INSENSITIVE);
     private final SharedPreferences prefs;
     private final Map<String, Cache> cache = new HashMap<>();
@@ -135,17 +136,24 @@ final class AnimanchAdapter {
     private byte[] thread(String id, String board) throws Exception {
         String raw = new String(fetch(HOST + "/board/" + board + "/", 30000L, 1_700_000), StandardCharsets.UTF_8);
         StringBuilder html = page("あにまんスレ");
-        html.append("<div class='thre'>");
+        html.append("<div class='thre' data-res='").append(id).append("'>");
         Matcher matches = RES.matcher(raw);
         int index = 0;
         while (matches.find() && index < 220) {
             String markup = matches.group(2);
             Matcher body = RES_BODY.matcher(markup);
-            String text = body.find() ? plain(body.group(1)) : "";
+            if (!body.find()) throw new IllegalStateException("Missing Animanch post body");
+            String text = plain(body.group(1));
+            Matcher posted = POSTED.matcher(markup);
+            if (!posted.find()) throw new IllegalStateException("Missing Animanch post date");
+            String date = plain(posted.group(1));
             String n = matches.group(1);
             String postId = id.substring(0, 7) + String.format(Locale.ROOT, "%06d", Integer.parseInt(n) % 1_000_000);
-            if (index > 0) html.append("<table border=0><tr><td class=rts></td><td class=rtd>");
+            if (index > 0) html.append("<table border=0><tr><td class=rts></td><td class=rtd>")
+                    .append("<span id='delcheck").append(postId).append("' class='rsc'>")
+                    .append(index).append("</span>");
             html.append("<span class='csb'>無念</span>Name <span class='cnm'>としあき</span>")
+                .append("<span class='cnw'>").append(escape(date)).append("</span>")
                 .append("<span class='cno'>No.").append(postId).append("</span>");
             Matcher image = IMAGE.matcher(markup);
             if (image.find()) {
@@ -153,6 +161,8 @@ final class AnimanchAdapter {
                 if (source != null) {
                     String photoId = remember("image.", source);
                     html.append("<a href='/animanch/src/").append(photoId).append(".jpg'>")
+                            .append(photoId).append(".jpg</a><br>")
+                            .append("<a href='/animanch/src/").append(photoId).append(".jpg'>")
                             .append("<img src='/animanch/thumb/").append(photoId).append("s.jpg'></a>");
                 }
             }

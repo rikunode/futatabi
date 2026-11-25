@@ -1,7 +1,7 @@
 {
-    "created_at":  "2026-11-25T22:58:01",
-    "description":  "v0.4.0-beta.16: Stock quote markup and Mebuki login/read diagnostics. Stock composer and authenticated Mebuki reading remain pending.",
-    "download_url":  "https://github.com/rikunode/futatabi/releases/download/v0.4.0-beta.16/futatabi-patches-v0.4.0-beta.16.mpp",
+    "created_at":  "2026-11-25T23:50:51",
+    "description":  "v0.4.0-beta.17: Mebuki DOM storage compatibility, safe auth diagnostics and browser-only fallback. Actual owner login and authenticated reading pending.",
+    "download_url":  "https://github.com/rikunode/futatabi/releases/download/v0.4.0-beta.17/futatabi-patches-v0.4.0-beta.17.mpp",
     "signature_download_url":  "",
-    "version":  "0.4.0-beta.16"
+    "version":  "0.4.0-beta.17"
 }

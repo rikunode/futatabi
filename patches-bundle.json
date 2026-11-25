@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-11-25T19:52:10",
-  "description": "v0.4.0-beta.12: Fix Animanch thread image dimensions (isolated Flutter UI verified), Aimoge official post contract and required image validation. Owner post confirmation pending.",
-  "download_url": "https://github.com/rikunode/futatabi/releases/download/v0.4.0-beta.12/futatabi-patches-v0.4.0-beta.12.mpp",
+  "created_at": "2026-11-25T20:11:27",
+  "description": "v0.4.0-beta.13: Fix Animanch precheck and reply anchor mapping; redacted board HTTP diagnostics. Owner write confirmation pending.",
+  "download_url": "https://github.com/rikunode/futatabi/releases/download/v0.4.0-beta.13/futatabi-patches-v0.4.0-beta.13.mpp",
   "signature_download_url": "",
-  "version": "0.4.0-beta.12"
+  "version": "0.4.0-beta.13"
 }

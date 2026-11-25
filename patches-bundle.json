@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-11-25T17:54:27",
-  "description": "v0.4.0-beta.8: Board login button for Aimoge/Mebuki only (ARM64, default ON); owner runtime verification pending. Mebuki authenticated thread conversion pending.",
-  "download_url": "https://github.com/rikunode/futatabi/releases/download/v0.4.0-beta.8/futatabi-patches-v0.4.0-beta.8.mpp",
+  "created_at": "2026-11-25T18:34:51",
+  "description": "v0.4.0-beta.9: Animanch thread date fix and Aimoge PKCE pre-send DNS recovery; owner DNS root cause and runtime confirmation pending.",
+  "download_url": "https://github.com/rikunode/futatabi/releases/download/v0.4.0-beta.9/futatabi-patches-v0.4.0-beta.9.mpp",
   "signature_download_url": "",
-  "version": "0.4.0-beta.8"
+  "version": "0.4.0-beta.9"
 }

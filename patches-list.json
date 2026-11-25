@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "0.4.0-beta.5",
+  "version": "0.4.0-beta.6",
   "patches": [
     {
       "name": "Block banner ads",
@@ -91,6 +91,37 @@
           "values": null
         }
       ]
+    },
+    {
+      "name": "Default dark mode",
+      "description": "Use dark mode when the theme is unset. Preserve saved choices and allow changing the theme in settings.",
+      "default": true,
+      "category": null,
+      "compatiblePackages": [
+        {
+          "packageName": "com.Nanasaki.ftutter",
+          "name": "futatter",
+          "description": null,
+          "apkFileType": "APK",
+          "appIconColor": null,
+          "signatures": null,
+          "targets": [
+            {
+              "version": "3.1.1",
+              "versionCodes": {
+                "ARM64_V8A": 65,
+                "ARMEABI_V7A": 65,
+                "X86_64": 65,
+                "X86": 65
+              },
+              "isExperimental": false,
+              "minSdk": null,
+              "description": null
+            }
+          ]
+        }
+      ],
+      "options": []
     },
     {
       "name": "Local board bridge",

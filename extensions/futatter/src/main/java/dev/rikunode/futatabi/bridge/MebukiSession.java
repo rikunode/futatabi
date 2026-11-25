@@ -59,6 +59,30 @@ final class MebukiSession {
         return c;
     }
 
+    /** Authenticated full read, only called from the in-process private reader. */
+    static MebukiThreadData readThread(String slug, String cookie) throws Exception {
+        if (slug == null || !slug.matches("[A-Za-z0-9_-]{8,24}"))
+            throw new IllegalArgumentException("Unknown Mebuki thread");
+        State state = verify(cookie);
+        if (state != State.AUTHENTICATED)
+            throw new ReadFailure(state.name());
+        HttpURLConnection c = connect("/api/thread/" + slug + "/messages?initial=1", cookie);
+        c.setRequestProperty("Accept", "text/x-script, text/plain, application/json");
+        try {
+            int status = c.getResponseCode();
+            if (status != 200) throw new ReadFailure("HTTP " + status);
+            try (InputStream in = c.getInputStream()) {
+                String body = new String(AimogeWriteClient.bounded(in, 2_000_000), StandardCharsets.UTF_8);
+                try { return MebukiThreadData.convert(body); }
+                catch (Exception ex) { throw new ReadFailure("UNSUPPORTED_THREAD_FORMAT"); }
+            }
+        } finally { c.disconnect(); }
+    }
+
+    static final class ReadFailure extends Exception {
+        ReadFailure(String reason) { super(reason); }
+    }
+
     /**
      * Explicit owner-operated contract observation; never expose response values.
      * Only the known read routes are allowed. No writes or guessed JSON mapping.

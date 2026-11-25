@@ -207,6 +207,7 @@ public class FutatabiHomeActivity extends Activity {
         addText("めぶき：おためしカタログは5分遅延。新規スレ・添付は未対応。");
         action("めぶき：X／Discordログイン（本人操作）", () ->
                 startActivityForResult(new Intent(this, MebukiLoginActivity.class), MEBUKI_LOGIN));
+        action("めぶき：本文を読む", this::mebukiReaderPicker);
         action("めぶき：一覧からレス投稿", () -> threadPicker("mebuki"));
     }
 
@@ -226,6 +227,27 @@ public class FutatabiHomeActivity extends Activity {
                         startActivityForResult(login, AIMOGE_LOGIN);
                     } catch (Exception ex) { updateNotice("認証URLを開けませんでした"); }
                 });
+    }
+
+    private void mebukiReaderPicker() {
+        startPage("めぶき • 本文を読む");
+        action("戻る", this::home);
+        final LinearLayout page = root;
+        remote("カタログを取得", "GET", "/ext/threads?board=mebuki", null, result -> {
+            if (root != page) return;
+            if (result.status != 200) { updateNotice("HTTP "+result.status); return; }
+            try {
+                JSONArray threads = new JSONObject(result.body).getJSONArray("threads");
+                updateNotice("おためしカタログでスレを選ぶ（本文は認証付き取得）");
+                for(int i=0;i<threads.length();i++) {
+                    JSONObject entry=threads.getJSONObject(i);
+                    String id=entry.getString("id");
+                    if(!id.matches("[0-9]{13}")) continue;
+                    action(PostPresentation.excerpt(entry.optString("title"))+" ("+entry.optInt("replies")+")", () ->
+                            startActivity(new Intent(this,MebukiReaderActivity.class).putExtra(MebukiReaderActivity.ID,id)));
+                }
+            } catch(Exception ignored) { updateNotice("一覧を解析できません"); }
+        });
     }
 
     private void threadPicker(String board) {

@@ -14,7 +14,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
-/** Public trial catalogue only; private thread data requires a verified authenticated contract. */
+/** Public trial catalogue; authenticated data is only returned to the in-process reader. */
 final class MebukiAdapter {
     private static final String HOST = "https://mebuki.moe";
     private static final String STORAGE = "https://storage.mebuki.moe/";
@@ -45,6 +45,21 @@ final class MebukiAdapter {
         } catch (Exception ex) {
             return BridgeServer.BridgeResponse.text(503, "Mebuki trial unavailable");
         }
+    }
+
+    MebukiThreadData readPrivateThread(Context context, String id) throws Exception {
+        String slug = slugForThreadId(id);
+        String cookie = MebukiSession.saved(context);
+        MebukiThreadData result = MebukiSession.readThread(slug, cookie);
+        if (!cookie.equals(MebukiSession.saved(context)))
+            throw new MebukiSession.ReadFailure("SESSION_CHANGED");
+        return result;
+    }
+
+    // Does not enter the public image index; the session cookie is not sent.
+    byte[] readPrivateImage(String url) throws Exception {
+        if (!MebukiThreadData.safeImage(url)) throw new IllegalArgumentException("Invalid attachment");
+        return download(url, 3_000_000, true);
     }
 
     JSONObject threadsJson() throws Exception {
@@ -99,9 +114,10 @@ final class MebukiAdapter {
                 + "<title>futatabi notice</title></head><body><div class='thre' data-res='" + id + "'>"
                 + "<span class='csb'>futatabi</span>Name <span class='cnm'>アプリからの案内</span>"
                 + "<span class='cnw'>-</span><span class='cno'>No." + id + "</span>"
-                + "<blockquote>めぶきのスレ本文は現在取得できません。<br>"
+                + "<blockquote>めぶきの認証済み本文は専用画面で表示します。<br>"
                 + "拡張ホームのめぶきログインで認証・保存を確認してください。<br>"
-                + "認証済み本文の変換は未対応です。"
+                + "下のリンクを押して本文を開く。または拡張ホームの「めぶき：本文を読む」へ。<br>"
+                + "<a href='https://futatabi.invalid/mebuki/" + id + "'>https://futatabi.invalid/mebuki/" + id + "</a>"
                 + "</blockquote></div></body></html>").getBytes(SJIS);
     }
 

@@ -15,11 +15,22 @@ public final class BoardLoginLaunch {
             "assets/images/ad[.]svghttp://127[.]0[.]0[.]1:18765/(aimoge|animanch)/res/([0-9]{13})[.]htm");
 
 
+    private static final String READER_PREFIX = "https://futatabi.invalid/mebuki/";
+    private static final Pattern READER = Pattern.compile("https://futatabi[.]invalid/mebuki/([0-9]{13})");
+
+    public static boolean tryReaderLaunchOrThrow(Activity activity, String url) {
+        if (url == null || !url.startsWith(READER_PREFIX)) return false;
+        if (!Boolean.TRUE.equals(tryLaunch(activity,url))) throw new IllegalStateException("Private reader unavailable");
+        return true;
+    }
+
     public static Boolean tryLaunch(Activity activity, String url) {
-        if (url == null || !url.startsWith(SIGNAL)) return null;
+        if (url == null || !(url.startsWith(SIGNAL) || url.startsWith(READER_PREFIX))) return null;
         boolean login = SIGNAL.equals(url);
         Matcher reply = REPLY.matcher(url);
-        if (!login && !reply.matches()) return Boolean.FALSE;
+        Matcher reader = READER.matcher(url);
+        boolean reading = reader.matches();
+        if (!login && !reply.matches() && !reading) return Boolean.FALSE;
         // Consume the reserved signal even when the Activity is no longer eligible.
         // Never launch a browser or a background Activity for this signal.
         if (activity == null || !activity.getClass().getName().equals("com.Nanasaki.ftutter.MainActivity")
@@ -28,7 +39,12 @@ public final class BoardLoginLaunch {
         try {
             Intent intent;
             if (login) intent = new Intent(activity, FutatabiHomeActivity.class);
-            else {
+            else if (reading) {
+                String id = reader.group(1);
+                if (new MebukiAdapter(activity).slugForThreadId(id)==null) return Boolean.FALSE;
+                intent = new Intent(activity, MebukiReaderActivity.class);
+                intent.putExtra(MebukiReaderActivity.ID,id);
+            } else {
                 intent = new Intent(activity, ThreadReplyActivity.class);
                 intent.putExtra("board", reply.group(1));
                 intent.putExtra("virtualId", reply.group(2));

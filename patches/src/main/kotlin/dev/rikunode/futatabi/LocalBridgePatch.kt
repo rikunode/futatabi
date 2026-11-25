@@ -79,6 +79,17 @@ private val bridgeManifestPatch = resourcePatch {
                 login.setAttribute("android:label", "Aimoge login")
                 application.appendChild(login)
             }
+            val readerName = "dev.rikunode.futatabi.bridge.MebukiReaderActivity"
+            if ((0 until activities.length).none {
+                    (activities.item(it) as? Element)?.getAttribute("android:name") == readerName
+                }
+            ) {
+                val reader = document.createElement("activity")
+                reader.setAttribute("android:name", readerName)
+                reader.setAttribute("android:exported", "false")
+                reader.setAttribute("android:label", "Mebuki")
+                application.appendChild(reader)
+            }
             val mebukiLogin = "dev.rikunode.futatabi.bridge.MebukiLoginActivity"
             val matching = manifest.getElementsByTagName("activity")
             if ((0 until matching.length).none {
@@ -133,5 +144,27 @@ val bridgePatch = bytecodePatch(
             if-eqz v0, :original
             return-object v0
         """, ExternalLabel("original", impl.instructions.first()))
+
+        // The stock myLaunchUrl uses flutter_custom_tabs for HTTPS links.
+        // Consume only the reserved private reader URL.
+        val tabs = mutableClassDefByOrNull("Lx2/k;")
+            ?: throw PatchException("futatabi: Flutter custom tabs implementation missing")
+        if (tabs.fields.none { it.name == "g" && it.type == "Landroid/app/Activity;" })
+            throw PatchException("futatabi: Flutter custom tabs Activity mismatch")
+        val tab = tabs.methods.singleOrNull {
+            it.name == "c" && it.parameterTypes.map { type -> type.toString() } ==
+                listOf("Ljava/lang/String;", "Z", "Ljava/util/Map;") && it.returnType == "V"
+        } ?: throw PatchException("futatabi: Flutter custom tabs launch missing")
+        val tabImpl = tab.implementation ?: throw PatchException("futatabi: custom tabs has no code")
+        if (tabImpl.registerCount != 8 || tabImpl.instructions.take(3).map { it.opcode } !=
+            listOf(Opcode.CONST_STRING, Opcode.INVOKE_STATIC, Opcode.IGET_OBJECT))
+            throw PatchException("futatabi: Flutter custom tabs signature mismatch")
+        tab.addInstructionsWithLabels(0, """
+            iget-object v0, p0, Lx2/k;->g:Landroid/app/Activity;
+            invoke-static {v0, p1}, Ldev/rikunode/futatabi/bridge/BoardLoginLaunch;->tryReaderLaunchOrThrow(Landroid/app/Activity;Ljava/lang/String;)Z
+            move-result v0
+            if-eqz v0, :originalTab
+            return-void
+        """, ExternalLabel("originalTab", tabImpl.instructions.first()))
     }
 }

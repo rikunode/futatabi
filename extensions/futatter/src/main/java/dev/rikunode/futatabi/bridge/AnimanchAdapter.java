@@ -41,9 +41,14 @@ final class AnimanchAdapter {
     private static final Pattern COUNT = Pattern.compile("threadCount['\"][^>]*>([0-9]+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern BODY = Pattern.compile("class=['\"]card-body['\"][^>]*>(.*?)(?:<p\\s+class=['\"]threadCount)", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     private static final Pattern RES = Pattern.compile("<li\\s+id=['\"]res([0-9]+)['\"][^>]*>(.*?)</li>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-    private static final Pattern RES_BODY = Pattern.compile("<div\\s+class=['\"]resbody[^'\"]*['\"][^>]*>(.*?)</div>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    private static final Pattern RES_BODY = Pattern.compile("<div\\s+class=['\"]resbody[^'\"]*['\"][^>]*>(.*?)</div>\\s*$", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     private static final Pattern POSTED = Pattern.compile("<span\\s+class=['\"]resposted['\"][^>]*>(.*?)</span>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     private static final Pattern IMAGE = Pattern.compile("<img[^>]+src=['\"]([^'\"]+)['\"]", Pattern.CASE_INSENSITIVE);
+    private static final Pattern BACKLINKS = Pattern.compile(
+            "<div\\s+class=['\"]reply['\"][^>]*>.*?</div>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    private static final Pattern ANCHOR = Pattern.compile(
+            "<a\\s+class=['\"]reslink['\"]\\s+href=['\"]#res([0-9]+)['\"][^>]*>&gt;&gt;[0-9]+</a>",
+            Pattern.CASE_INSENSITIVE);
     private final SharedPreferences prefs;
     private final Map<String, Cache> cache = new HashMap<>();
     private long lastRequest;
@@ -143,12 +148,12 @@ final class AnimanchAdapter {
             String markup = matches.group(2);
             Matcher body = RES_BODY.matcher(markup);
             if (!body.find()) throw new IllegalStateException("Missing Animanch post body");
-            String text = plain(body.group(1));
+            String text = plain(replyMarkup(id, body.group(1)));
             Matcher posted = POSTED.matcher(markup);
             if (!posted.find()) throw new IllegalStateException("Missing Animanch post date");
             String date = plain(posted.group(1));
             String n = matches.group(1);
-            String postId = id.substring(0, 7) + String.format(Locale.ROOT, "%06d", Integer.parseInt(n) % 1_000_000);
+            String postId = virtualPostId(id, n);
             if (index > 0) html.append("<table border=0><tr><td class=rts></td><td class=rtd>")
                     .append("<span id='delcheck").append(postId).append("' class='rsc'>")
                     .append(index).append("</span>");
@@ -176,6 +181,33 @@ final class AnimanchAdapter {
         return html.toString().getBytes(SJIS);
     }
 
+    private static String virtualPostId(String thread, String number) {
+        return thread.substring(0, 7) + String.format(Locale.ROOT, "%06d", Integer.parseInt(number) % 1_000_000);
+    }
+
+    static String replyMarkup(String thread, String body) {
+        // Backlinks are rendered by the source as a separate reply list.
+        String clean = BACKLINKS.matcher(body).replaceAll("");
+        Matcher links = ANCHOR.matcher(clean);
+        StringBuffer out = new StringBuffer();
+        while (links.find())
+            links.appendReplacement(out, Matcher.quoteReplacement("&gt;No." + virtualPostId(thread, links.group(1))));
+        links.appendTail(out);
+        return out.toString();
+    }
+
+    static String sourceReplyText(String thread, String text) {
+        Pattern quote = Pattern.compile("(?m)^>No\\." + thread.substring(0, 7) + "([0-9]{6})(?=\\s|$)");
+        Matcher m = quote.matcher(text);
+        StringBuffer out = new StringBuffer();
+        while (m.find()) {
+            int number = Integer.parseInt(m.group(1));
+            m.appendReplacement(out, Matcher.quoteReplacement(number == 0 ? m.group() : ">>" + number));
+        }
+        m.appendTail(out);
+        return out.toString();
+    }
+
     /** Three-step sequence, never called except through a token-authenticated user action. */
     BridgeServer.BridgeResponse post(JSONObject fields) {
         try {
@@ -199,15 +231,20 @@ final class AnimanchAdapter {
             if (!title.isEmpty()) values.put("title", title);
             if (!category.isEmpty()) values.put("category", category);
             values.put("name", name);
-            values.put("text", text);
+            values.put("text", threadId.isEmpty() ? text : sourceReplyText(threadId, text));
             if (actualThread != null) values.put("thread", actualThread);
+            String referer = HOST + (threadId.isEmpty() ? "/" : "/board/" + actualThread + "/");
+            // Establish the same official session as the site's form before preCheck.
+            NetworkResponse formPage = transmit("GET", referer, null, null);
+            if (formPage.status != 200)
+                return BridgeServer.BridgeResponse.text(formPage.status, "Animanch form HTTP " + formPage.status);
             String encoded = form(values);
             NetworkResponse pre = transmit("POST", HOST + "/inc/comment.php?preCheck",
-                    encoded.getBytes(StandardCharsets.UTF_8), "application/x-www-form-urlencoded; charset=UTF-8");
+                    encoded.getBytes(StandardCharsets.UTF_8), "application/x-www-form-urlencoded; charset=UTF-8", referer);
             if (pre.status != 200)
                 return BridgeServer.BridgeResponse.text(pre.status, boundedError(pre));
             NetworkResponse response = transmit("POST", HOST + "/inc/comment.php",
-                    encoded.getBytes(StandardCharsets.UTF_8), "application/x-www-form-urlencoded; charset=UTF-8");
+                    encoded.getBytes(StandardCharsets.UTF_8), "application/x-www-form-urlencoded; charset=UTF-8", referer);
             if (response.status != 200)
                 return BridgeServer.BridgeResponse.text(response.status, boundedError(response));
             JSONObject accepted = new JSONObject(new String(response.bytes, StandardCharsets.UTF_8));
@@ -228,7 +265,7 @@ final class AnimanchAdapter {
                 byte[] multipart = multipart(boundary, file.optString("name", "image.jpg"), mime,
                         bytes, number, thread);
                 NetworkResponse upload = transmit("POST", HOST + "/upload/", multipart,
-                        "multipart/form-data; boundary=" + boundary);
+                        "multipart/form-data; boundary=" + boundary, referer);
                 if (upload.status != 200) {
                     JSONObject partial = new JSONObject();
                     partial.put("postAccepted", true);
@@ -256,6 +293,10 @@ final class AnimanchAdapter {
     }
 
     private NetworkResponse transmit(String method, String url, byte[] body, String type) throws Exception {
+        return transmit(method, url, body, type, null);
+    }
+
+    private NetworkResponse transmit(String method, String url, byte[] body, String type, String referer) throws Exception {
         URL target = new URL(url);
         if (!"https".equals(target.getProtocol()) || !"bbs.animanch.com".equals(target.getHost()))
             throw new IllegalArgumentException("Untrusted endpoint");
@@ -277,6 +318,11 @@ final class AnimanchAdapter {
         String cookie = prefs.getString("session_cookie", "");
         if (!cookie.isEmpty()) connection.setRequestProperty("Cookie", cookie);
         if (body != null) {
+            if (referer != null) {
+                connection.setRequestProperty("Origin", HOST);
+                connection.setRequestProperty("Referer", referer);
+                connection.setRequestProperty("X-Requested-With", "XMLHttpRequest");
+            }
             connection.setDoOutput(true);
             connection.setRequestProperty("Content-Type", type);
             connection.setFixedLengthStreamingMode(body.length);
@@ -284,7 +330,9 @@ final class AnimanchAdapter {
         try {
             if (body != null) try (OutputStream out = connection.getOutputStream()) { out.write(body); }
             int status = connection.getResponseCode();
-            java.util.List<String> setCookies = connection.getHeaderFields().get("Set-Cookie");
+            java.util.List<String> setCookies = null;
+            for (Map.Entry<String, java.util.List<String>> entry : connection.getHeaderFields().entrySet())
+                if ("Set-Cookie".equalsIgnoreCase(entry.getKey())) setCookies = entry.getValue();
             if (setCookies != null) for (String cookieLine : setCookies) {
                 if (cookieLine.startsWith("PHPSESSID=")) {
                     String pair = cookieLine.split(";", 2)[0];

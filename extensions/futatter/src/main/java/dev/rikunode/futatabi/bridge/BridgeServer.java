@@ -130,6 +130,15 @@ final class BridgeServer {
             } else {
                 response = BridgeResponse.text(404, "Not found");
             }
+            // Log only bounded route categories and status, never query, IDs,
+            // request bodies, credentials, cookies or response payloads.
+            if (response.status >= 400 && (path.startsWith("/aimoge/") || path.startsWith("/animanch/"))) {
+                String[] route = path.split("\\?", 2)[0].split("/");
+                String kind = route.length > 2 && route[2].matches("res|thumb|src|cat|futaba\\.php|futaba\\.htm|sd\\.php")
+                        ? route[2] : "other";
+                Log.w(TAG, "Board request " + ("GET".equals(method) ? "GET" : "POST".equals(method) ? "POST" : "other")
+                        + " " + route[1] + "/" + kind + " HTTP " + response.status);
+            }
             write(client.getOutputStream(), response);
         } catch (Exception ex) {
             Log.w(TAG, "Local request error: " + ex.getClass().getSimpleName());

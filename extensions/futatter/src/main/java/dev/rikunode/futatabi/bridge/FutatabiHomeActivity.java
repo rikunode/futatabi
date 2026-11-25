@@ -34,7 +34,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /** Self-contained Android UI; does not modify Futatter's existing Flutter screens. */
-public final class FutatabiHomeActivity extends Activity {
+public class FutatabiHomeActivity extends Activity {
     private static final String STORE = "futatabi_extension_private";
     private static final int CHOOSE_IMAGE = 12;
     private static final int MEBUKI_LOGIN = 13;
@@ -55,8 +55,31 @@ public final class FutatabiHomeActivity extends Activity {
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
         setTitle("futatabi");
+        if (directReply()) {
+            String board = getIntent().getStringExtra("board");
+            String id = getIntent().getStringExtra("virtualId");
+            if (id != null && id.matches("[0-9]{13}")) {
+                if ("aimoge".equals(board)) {
+                    String uuid = new BridgeIndex(this).threadUuid(id);
+                    if (uuid != null) {
+                        try { compose(UUID.fromString(uuid).toString()); return; }
+                        catch (IllegalArgumentException ignored) { }
+                    }
+                } else if ("animanch".equals(board) &&
+                        getSharedPreferences("futatabi_animanch_private", MODE_PRIVATE)
+                                .getString("board." + id, null) != null) {
+                    composeAnimanch(id);
+                    return;
+                }
+            }
+            startPage("投稿先を確認できませんでした");
+            action("スレに戻る", this::finish);
+            return;
+        }
         home();
     }
+    private boolean directReply() { return this instanceof ThreadReplyActivity; }
+
     @Override protected void onDestroy() {
         io.shutdownNow();
         super.onDestroy();
@@ -234,7 +257,8 @@ public final class FutatabiHomeActivity extends Activity {
         threadId = replyTo;
         attached.clear();
         startPage(replyTo.isEmpty() ? "あいもげ • 新規スレ" : "あいもげ • レス投稿");
-        action("戻る", replyTo.isEmpty() ? this::home : () -> threadPicker("aimoge"));
+        if (directReply()) addText("返信先スレ: No." + getIntent().getStringExtra("virtualId"));
+        action("戻る", directReply() ? this::finish : replyTo.isEmpty() ? this::home : () -> threadPicker("aimoge"));
         addText("本文（最大4,000字）");
         bodyField = input("本文", "", true);
         count = addText("0 / 4000");
@@ -303,7 +327,7 @@ public final class FutatabiHomeActivity extends Activity {
                         if (result.status == 201) {
                             startPage("投稿成功");
                             addText(result.body);
-                            action("ホームへ", this::home);
+                            action(directReply() ? "スレに戻る" : "ホームへ", directReply() ? this::finish : this::home);
                         } else updateNotice("投稿失敗 HTTP " + result.status + ": " + result.body);
                     });
                 } catch (Exception ex) {
@@ -368,7 +392,8 @@ public final class FutatabiHomeActivity extends Activity {
     private void composeAnimanch(String replyTo) {
         attached.clear();
         startPage(replyTo.isEmpty() ? "あにまん • 新規スレ" : "あにまん • レス投稿");
-        action("戻る", replyTo.isEmpty() ? this::home : () -> threadPicker("animanch"));
+        if (directReply()) addText("返信先スレ: No." + getIntent().getStringExtra("virtualId"));
+        action("戻る", directReply() ? this::finish : replyTo.isEmpty() ? this::home : () -> threadPicker("animanch"));
         final EditText title = replyTo.isEmpty() ? input("スレタイトル", "", false) : null;
         final EditText category = replyTo.isEmpty() ? input("カテゴリID（掲示板のカテゴリ番号）", "", false) : null;
         final EditText name = input("名前（省略可）", "", false);
@@ -427,7 +452,7 @@ public final class FutatabiHomeActivity extends Activity {
                         if (result.status == 201) {
                             startPage("あにまん • 投稿完了");
                             addText(result.body);
-                            action("ホームへ", this::home);
+                            action(directReply() ? "スレに戻る" : "ホームへ", directReply() ? this::finish : this::home);
                         } else updateNotice("投稿失敗 HTTP " + result.status + ": " + result.body);
                     });
                 } catch (Exception ex) {

@@ -1,5 +1,9 @@
 package dev.rikunode.futatabi
 
+import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLabels
+import app.morphe.patcher.patch.PatchException
+import app.morphe.patcher.util.smali.ExternalLabel
+import com.android.tools.smali.dexlib2.Opcode
 import app.morphe.patcher.patch.ApkFileType
 import app.morphe.patcher.patch.AppTarget
 import app.morphe.patcher.patch.Compatibility
@@ -53,6 +57,17 @@ private val bridgeManifestPatch = resourcePatch {
                 activity.appendChild(intentFilter)
                 application.appendChild(activity)
             }
+            val replyName = "dev.rikunode.futatabi.bridge.ThreadReplyActivity"
+            if ((0 until activities.length).none {
+                    (activities.item(it) as? Element)?.getAttribute("android:name") == replyName
+                }
+            ) {
+                val reply = document.createElement("activity")
+                reply.setAttribute("android:name", replyName)
+                reply.setAttribute("android:exported", "false")
+                reply.setAttribute("android:label", "futatabi")
+                application.appendChild(reply)
+            }
             val aimogeLogin = "dev.rikunode.futatabi.bridge.AimogeLoginActivity"
             if ((0 until activities.length).none {
                     (activities.item(it) as? Element)?.getAttribute("android:name") == aimogeLogin
@@ -83,7 +98,7 @@ private val bridgeManifestPatch = resourcePatch {
 @Suppress("unused")
 val bridgePatch = bytecodePatch(
     name = "Local board bridge",
-    description = "Auto-register boards and run the local bridge with protected posting UI for Aimoge and Animanch.",
+    description = "Auto-register boards and run the local bridge with protected posting UI, including direct thread replies for Aimoge and Animanch (ARM64).",
     default = true,
 ) {
     compatibleWith(
@@ -94,9 +109,29 @@ val bridgePatch = bytecodePatch(
             targets = listOf(AppTarget(version = "3.1.1", versionCode = 65)),
         )
     )
-    dependsOn(bridgeManifestPatch)
+    dependsOn(bridgeManifestPatch, threadReplyResources)
     extendWith("extensions/futatter.mpe")
     execute {
-        // The extension is merged before this block executes.
+        // Only the reserved relative asset-path signal is consumed; normal URLs
+        // keep the original URL-launcher implementation.
+        val clazz = mutableClassDefByOrNull("Lh6/i;")
+            ?: throw PatchException("futatabi: URL launcher class missing")
+        if (clazz.fields.none { it.name == "c" && it.type == "Landroid/app/Activity;" })
+            throw PatchException("futatabi: URL launcher Activity field mismatch")
+        val method = clazz.methods.singleOrNull {
+            it.name == "e" && it.parameterTypes.map { type -> type.toString() } ==
+                listOf("Ljava/lang/String;", "Ljava/util/Map;") && it.returnType == "Ljava/lang/Boolean;"
+        } ?: throw PatchException("futatabi: URL launcher method missing")
+        val impl = method.implementation ?: throw PatchException("futatabi: URL launcher has no code")
+        if (impl.registerCount != 5 || impl.instructions.take(4).map { it.opcode } !=
+            listOf(Opcode.INVOKE_VIRTUAL, Opcode.NEW_INSTANCE, Opcode.CONST_STRING, Opcode.INVOKE_DIRECT))
+            throw PatchException("futatabi: URL launcher signature mismatch")
+        method.addInstructionsWithLabels(0, """
+            iget-object v0, p0, Lh6/i;->c:Landroid/app/Activity;
+            invoke-static {v0, p1}, Ldev/rikunode/futatabi/bridge/BoardLoginLaunch;->tryLaunch(Landroid/app/Activity;Ljava/lang/String;)Ljava/lang/Boolean;
+            move-result-object v0
+            if-eqz v0, :original
+            return-object v0
+        """, ExternalLabel("original", impl.instructions.first()))
     }
 }

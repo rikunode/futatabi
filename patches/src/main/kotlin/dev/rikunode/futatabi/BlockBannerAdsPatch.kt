@@ -41,7 +41,8 @@ val blockBannerAdsPatch = rawResourcePatch(
         libapp.forEachBlock { buffer, size -> digest.update(buffer, 0, size) }
         val sha256 = digest.digest().joinToString("") { "%02x".format(it) }
         // Board login button may have run first; accept only its exact verified output.
-        if (sha256 != LIBAPP_SHA256 && sha256 != LOGIN_ONLY_LIBAPP_SHA256) {
+        if (sha256 != LIBAPP_SHA256 && sha256 != LOGIN_ONLY_LIBAPP_SHA256 &&
+            sha256 != REPLY_ONLY_LIBAPP_SHA256 && sha256 != REPLY_LOGIN_LIBAPP_SHA256) {
             throw PatchException("futatabi: unsupported ARM64 libapp.so (SHA-256 $sha256)")
         }
 

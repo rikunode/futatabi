@@ -50,12 +50,18 @@ final class MebukiNewThreadDraft {
     private String filename() {
         return "attachment."+("image/jpeg".equals(mime)?"jpg":mime.substring(6));
     }
-    // The official attachment component renders the file's name as the preview alt.
-    // A dispatched drop alone is not evidence that React accepted the attachment.
+    // The official attachment hook renames every incoming File to upload_<random>.<ext>
+    // before placing it in React state. Its preview uses that normalized name as alt.
+    // Restrict the check to the attachment fieldset and its single blob preview.
     String imageReadyScript() {
+        String extension=filename().substring(filename().lastIndexOf('.'));
         return "(function(){"+GUARD+
                 "const b=document.querySelector('textarea[name=content]'),f=b&&b.closest('form');"+
-                "return !!(f&&Array.from(f.querySelectorAll('img[alt]')).some(i=>i.alt==="+q(filename())+"));})()";
+                "const a=f&&f.querySelector('input[type=hidden][name=attachments]'),s=a&&a.closest('fieldset');"+
+                "if(!s)return false;const images=Array.from(s.querySelectorAll('img[alt]'));"+
+                "return images.length===1&&images[0].src.startsWith('blob:')&&"+
+                "/^upload_[a-z0-9]{0,6}$/.test(images[0].alt.slice(0,-"+extension.length()+"))&&"+
+                "images[0].alt.endsWith("+q(extension)+");})()";
     }
     String finishScript(String key) {
         String filename = filename();

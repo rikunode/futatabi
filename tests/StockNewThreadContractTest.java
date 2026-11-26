@@ -187,10 +187,19 @@ public final class StockNewThreadContractTest {
         check(!MebukiThreadData.convert(own).matchesNewThread("different",timestamp),"body mismatch");
         check(!MebukiThreadData.convert(own).matchesNewThread(op,timestamp+1),"old thread");
         check(!MebukiThreadData.convert(own.replaceFirst("\\\"attachments\\\":\\[\\{.*?\\}\\]","\"attachments\":[]")).matchesNewThread(op,timestamp),"missing attachment");
+        MebukiNewThreadDraft emptyBody=new MebukiNewThreadDraft(StockReplyRequest.parse(HEADERS.get("content-type"),form(null,"","",true)));
+        check("fixture".equals(emptyBody.title)&&emptyBody.body.isEmpty(),"stock title transferred, official body empty");
+        check(MebukiNewThreadObservation.isCreatePost("POST","https","mebuki.moe",-1,"/app/new.data"),"SPA create POST");
+        check(MebukiNewThreadObservation.isCreatePost("POST","https","mebuki.moe",443,"/app/new"),"native form create POST");
+        check(!MebukiNewThreadObservation.isCreatePost("GET","https","mebuki.moe",-1,"/app/new.data"),"GET not a create POST");
+        check(!MebukiNewThreadObservation.isCreatePost("POST","https","mebuki.moe.example",-1,"/app/new.data"),"other host not observed");
+        check(!MebukiNewThreadObservation.isCreatePost("POST","https","mebuki.moe",444,"/app/new.data"),"other port not observed");
         if(args.length==1)java.nio.file.Files.writeString(java.nio.file.Path.of(args[0]),new JSONObject()
                 .put("ready",MebukiNewThreadDraft.readyScript()).put("begin",captured.beginScript("fixture-draft"))
+                .put("beginEmpty",emptyBody.beginScript("fixture-empty"))
                 .put("chunk",MebukiNewThreadDraft.chunkScript("fixture-draft","YWJj"))
-                .put("finish",captured.finishScript("fixture-draft")).put("banner",MebukiPwaBanner.SCRIPT).toString());
+                .put("finish",captured.finishScript("fixture-draft")).put("imageReady",captured.imageReadyScript())
+                .put("observe",MebukiNewThreadObservation.SCRIPT).put("banner",MebukiPwaBanner.SCRIPT).toString());
         check(!result(stock,"aimoge",form("invalid","title","sage",true)).contains("\"status\":\"ok\"")&&aim==2,"invalid reply ID does not create");
         System.out.println("PASS stock new thread: Aimoge credential, fields, image, OP readback; Animanch 32 picker options, default, no send until selection, cancel/double-tap guard, invalid rejection, unchanged replies, precheck, image, readback, partial failure; Mebuki draft handoff without posting; malformed reply rejected. No live network.");
     }

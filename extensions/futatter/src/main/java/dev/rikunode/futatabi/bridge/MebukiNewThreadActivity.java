@@ -26,6 +26,8 @@ public final class MebukiNewThreadActivity extends Activity {
     private static final String SITE = MebukiSession.SITE;
     private static final String EXTRA = "draft_id";
     private static final int CHUNK = 96 * 1024;
+    private static final int PICK_IMAGE = 4201;
+    private android.webkit.ValueCallback<Uri[]> imageChoice;
     private static Pending pending;
     private static String active;
     private static final class Pending {
@@ -61,6 +63,8 @@ public final class MebukiNewThreadActivity extends Activity {
     private TextView status;
     private Pending claimed;
     private boolean failed, preparing, transferred, checkingThread;
+    private volatile boolean createRequestObserved;
+    private volatile int createHttpError;
     private String checkedCookie;
     private long startedAt;
 
@@ -97,8 +101,6 @@ public final class MebukiNewThreadActivity extends Activity {
         close.setOnClickListener(v->finish());
         root.addView(close);
         browser = new WebView(this);
-        // Reveal only after the official dismissal preference and draft are applied.
-        browser.setVisibility(android.view.View.INVISIBLE);
         WebSettings settings=browser.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
@@ -110,7 +112,19 @@ public final class MebukiNewThreadActivity extends Activity {
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(browser,true);
         // Standard WebView UA and official challenge. No JS bridge or token handling.
-        browser.setWebChromeClient(new WebChromeClient());
+        browser.setWebChromeClient(new WebChromeClient(){
+            @Override public boolean onShowFileChooser(WebView v,android.webkit.ValueCallback<Uri[]> callback,
+                    FileChooserParams params){
+                if(!onForm()||!transferred||imageChoice!=null){callback.onReceiveValue(null);return true;}
+                imageChoice=callback;
+                try{
+                    Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                            .setType("image/*");
+                    startActivityForResult(pick,PICK_IMAGE);
+                }catch(RuntimeException ex){imageChoice=null;callback.onReceiveValue(null);}
+                return true;
+            }
+        });
         browser.setOnTouchListener((v,e)->!transferred || failed);
         browser.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView v,WebResourceRequest request) {
@@ -123,15 +137,16 @@ public final class MebukiNewThreadActivity extends Activity {
             @Override public void onPageStarted(WebView v,String url,android.graphics.Bitmap icon) {
                 if (!allowed(url)) { v.stopLoading(); fail("公式のスレ立て画面を確認できません。"); }
             }
-            @Override public void onPageCommitVisible(WebView v,String url) {
-                v.evaluateJavascript(MebukiPwaBanner.SCRIPT,null);
-            }
             @Override public void onPageFinished(WebView v,String url) {
-                v.evaluateJavascript(MebukiPwaBanner.SCRIPT,null);
                 if (MebukiNewThreadDraft.URL.equals(url) && !preparing && !transferred && !failed) {
                     preparing=true;
-                    awaitForm(0);
+                    // Apply the official preference once, before touching the form.
+                    v.evaluateJavascript(MebukiPwaBanner.SCRIPT,ignored->awaitForm(0));
                 } else observeThread(url);
+            }
+            @Override public WebResourceResponse shouldInterceptRequest(WebView v,WebResourceRequest req) {
+                if(isCreateRequest(req))createRequestObserved=true;
+                return null; // Observation only; Chromium owns the entire request.
             }
             @Override public void doUpdateVisitedHistory(WebView v,String url,boolean reload) {
                 observeThread(url);
@@ -140,7 +155,11 @@ public final class MebukiNewThreadActivity extends Activity {
                 if(req.isForMainFrame())fail("公式ページの読み込みに失敗しました。投稿結果は未確認です。");
             }
             @Override public void onReceivedHttpError(WebView v,WebResourceRequest req,WebResourceResponse response) {
-                if(req.isForMainFrame())fail("公式ページ HTTP "+response.getStatusCode()+"。投稿結果は未確認です。");
+                if(isCreateRequest(req)){
+                    createRequestObserved=true;
+                    createHttpError=response.getStatusCode();
+                    if(alive())status.setText("公式作成先 HTTP "+createHttpError+"。投稿結果は未確認です。再送前に確認してください。");
+                }else if(req.isForMainFrame())fail("公式ページ HTTP "+response.getStatusCode()+"。投稿結果は未確認です。");
             }
             @Override public void onReceivedSslError(WebView v,android.webkit.SslErrorHandler h,android.net.http.SslError err) {
                 h.cancel();fail("TLSエラーで中止しました。");
@@ -171,7 +190,7 @@ public final class MebukiNewThreadActivity extends Activity {
     private void fail(String message) {
         if (browser==null || isFinishing() || isDestroyed()) return;
         failed=true;
-        browser.setVisibility(android.view.View.VISIBLE);
+        browser.setOnTouchListener((v,e)->true);
         status.setText(message+" 元画面からむやみに再送しないでください。");
     }
 
@@ -221,12 +240,7 @@ public final class MebukiNewThreadActivity extends Activity {
             browser.evaluateJavascript(claimed.draft.finishScript(claimed.id),r->{
                 if(!onForm())return;
                 if(!"true".equals(r)){fail("画像の引き継ぎに失敗しました。未送信です。");return;}
-                browser.evaluateJavascript(MebukiPwaBanner.SCRIPT,ignored->{
-                    if(!onForm())return;
-                    transferred=true;
-                    browser.setVisibility(android.view.View.VISIBLE);
-                    status.setText("スレタイと画像を確認し、公式フォームの本文を入力してください。タグ・スレ落ち・本人確認後、公式の作成ボタンで送信します。");
-                });
+                awaitImage(0);
             });
             return;
         }
@@ -236,6 +250,45 @@ public final class MebukiNewThreadActivity extends Activity {
             if(!onForm())return;
             if(!"true".equals(r)){fail("画像の引き継ぎに失敗しました。未送信です。");return;}
             sendImageChunk(end);
+        });
+    }
+
+    private static boolean isCreateRequest(WebResourceRequest req){
+        Uri u=req.getUrl();
+        return u.getUserInfo()==null&&MebukiNewThreadObservation.isCreatePost(
+                req.getMethod(),u.getScheme(),u.getHost(),u.getPort(),u.getPath());
+    }
+    private void awaitImage(int attempt){
+        if(!onForm())return;
+        browser.evaluateJavascript(claimed.draft.imageReadyScript(),r->{
+            if(!onForm())return;
+            if(!"true".equals(r)&&attempt<30){
+                browser.postDelayed(()->awaitImage(attempt+1),500);
+                return;
+            }
+            // Release native input gate even if preview was not confirmed.
+            // The official form remains authoritative. Never repeat the drop or submit.
+            transferred=true;
+            browser.setOnTouchListener(null);
+            status.setText(("true".equals(r)?"スレ画の引き継ぎを確認しました。":"スレ画の引き継ぎを確認できません。必要なら公式画像欄から選び直してください。")+
+                    " 本文・タグ1つ以上・カテゴリ・スレ落ち・本人確認後、公式ボタンで作成してください。反応しない場合はここをタップ。");
+            status.setOnClickListener(v->inspectForm());
+        });
+    }
+    private void inspectForm(){
+        if(!onForm()||!transferred)return;
+        browser.evaluateJavascript(MebukiNewThreadObservation.SCRIPT,r->{
+            if(!onForm())return;
+            String observed=createHttpError>0?"公式作成先 HTTP "+createHttpError:
+                    createRequestObserved?"公式作成リクエストを観測（結果未確認）":"公式作成リクエスト未観測";
+            try{
+                org.json.JSONObject j=new org.json.JSONObject(r);
+                status.setText(observed+"／"+(!j.optBoolean("buttonFound")?"作成ボタン未検出":
+                        j.optBoolean("disabled")?"作成ボタン無効":"作成ボタン有効")+
+                        (j.optBoolean("tagMissing")?"／タグ未入力":"")+
+                        (j.optBoolean("invalid")?"／入力エラーあり":"")+
+                        "。再確認するにはここをタップ。");
+            }catch(Exception ex){status.setText(observed+"／フォーム状態未確認。再確認するにはここをタップ。");}
         });
     }
 
@@ -261,7 +314,17 @@ public final class MebukiNewThreadActivity extends Activity {
         },"futatabi-mebuki-new-confirm").start();
     }
 
+    @Override protected void onActivityResult(int request,int result,Intent data){
+        super.onActivityResult(request,result,data);
+        if(request!=PICK_IMAGE||imageChoice==null)return;
+        android.webkit.ValueCallback<Uri[]> callback=imageChoice;
+        imageChoice=null;
+        Uri uri=result==RESULT_OK&&data!=null?data.getData():null;
+        callback.onReceiveValue(onForm()&&uri!=null&&"content".equals(uri.getScheme())?new Uri[]{uri}:null);
+    }
+
     @Override protected void onDestroy() {
+        if(imageChoice!=null){imageChoice.onReceiveValue(null);imageChoice=null;}
         if(browser!=null){browser.destroy();browser=null;}
         synchronized(MebukiNewThreadActivity.class){
             if(claimed!=null && claimed.id.equals(active))active=null;

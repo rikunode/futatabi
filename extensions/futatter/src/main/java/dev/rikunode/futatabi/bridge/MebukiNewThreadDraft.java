@@ -40,15 +40,25 @@ final class MebukiNewThreadDraft {
         return "(function(){"+GUARD+
                 "const t=document.querySelector('input[name=name]'),b=document.querySelector('textarea[name=content]');"+
                 "if(!t||!b||!b.closest('section')||!t.closest('form')||t.closest('form')!==b.closest('form')||!document.querySelector('input[name=attachments]'))return false;"+
-                "function fill(el,proto,val){Object.getOwnPropertyDescriptor(proto,'value').set.call(el,val);el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));}"+
+                "function fill(el,proto,val){if(el.value===val)return;Object.getOwnPropertyDescriptor(proto,'value').set.call(el,val);el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));}"+
                 "fill(t,HTMLInputElement.prototype,"+q(title)+");fill(b,HTMLTextAreaElement.prototype,"+q(body)+");"+
                 "window["+q(key)+"]=[];return true;})()";
     }
     static String chunkScript(String key,String chunk) {
         return "(function(){"+GUARD+"const a=window["+q(key)+"];if(!Array.isArray(a))return false;a.push("+q(chunk)+");return true;})()";
     }
+    private String filename() {
+        return "attachment."+("image/jpeg".equals(mime)?"jpg":mime.substring(6));
+    }
+    // The official attachment component renders the file's name as the preview alt.
+    // A dispatched drop alone is not evidence that React accepted the attachment.
+    String imageReadyScript() {
+        return "(function(){"+GUARD+
+                "const b=document.querySelector('textarea[name=content]'),f=b&&b.closest('form');"+
+                "return !!(f&&Array.from(f.querySelectorAll('img[alt]')).some(i=>i.alt==="+q(filename())+"));})()";
+    }
     String finishScript(String key) {
-        String filename = "attachment."+("image/jpeg".equals(mime)?"jpg":mime.substring(6));
+        String filename = filename();
         return "(function(){"+GUARD+
                 "const a=window["+q(key)+"],b=document.querySelector('textarea[name=content]'),s=b&&b.closest('section');"+
                 "if(!Array.isArray(a)||!s)return false;delete window["+q(key)+"];"+

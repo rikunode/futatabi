@@ -50,7 +50,7 @@ final class ExtensionApi {
         String supplied = headers.getOrDefault("x-futatabi-token", "");
         byte[] a = supplied.getBytes(StandardCharsets.US_ASCII);
         byte[] b = localToken().getBytes(StandardCharsets.US_ASCII);
-        return a.length == b.length && MessageDigest.isEqual(a, b);
+        return b.length > 0 && a.length == b.length && MessageDigest.isEqual(a, b);
     }
 
     BridgeServer.BridgeResponse route(String method, String path, Map<String,String> headers, byte[] body) {

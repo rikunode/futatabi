@@ -23,6 +23,8 @@ private val bridgeManifestPatch = resourcePatch {
             val manifest = document.documentElement
             val application = manifest.getElementsByTagName("application").item(0) as? Element
                 ?: throw IllegalStateException("futatabi: application manifest element missing")
+            // The extension is injected as dex, so set this on the actual target manifest too.
+            application.setAttribute("android:allowBackup", "false")
             val providerName = "dev.rikunode.futatabi.bridge.FutatabiProvider"
             val providers = manifest.getElementsByTagName("provider")
             if ((0 until providers.length).none {
@@ -117,7 +119,7 @@ val bridgePatch = bytecodePatch(
             name = "futatter",
             packageName = "com.Nanasaki.ftutter",
             apkFileType = ApkFileType.APK,
-            targets = listOf(AppTarget(version = "3.1.1", versionCode = 65)),
+            targets = listOf(AppTarget(version = "3.1.1", versionCodes = mapOf(app.morphe.patcher.patch.SupportedAbi.ARM64_V8A to 65))),
         )
     )
     dependsOn(bridgeManifestPatch, threadReplyResources)

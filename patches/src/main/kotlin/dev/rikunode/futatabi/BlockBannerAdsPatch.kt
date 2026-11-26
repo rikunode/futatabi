@@ -27,7 +27,7 @@ val blockBannerAdsPatch = rawResourcePatch(
             name = "futatter",
             packageName = "com.Nanasaki.ftutter",
             apkFileType = ApkFileType.APK,
-            targets = listOf(AppTarget(version = "3.1.1", versionCode = 65)),
+            targets = listOf(AppTarget(version = "3.1.1", versionCodes = mapOf(app.morphe.patcher.patch.SupportedAbi.ARM64_V8A to 65))),
         )
     )
 

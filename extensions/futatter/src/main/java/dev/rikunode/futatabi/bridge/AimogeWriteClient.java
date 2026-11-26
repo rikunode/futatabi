@@ -113,6 +113,11 @@ final class AimogeWriteClient {
         } finally { conn.disconnect(); }
     }
 
+    static String attachmentName(String mime) {
+        String ext = mime.substring("image/".length());
+        return "attachment." + ("jpeg".equals(ext) ? "jpg" : ext);
+    }
+
     static String sha256(byte[] data) throws Exception {
         byte[] digest = MessageDigest.getInstance("SHA-256").digest(data);
         StringBuilder hex = new StringBuilder();
@@ -129,7 +134,7 @@ final class AimogeWriteClient {
         payload.put("sha256", sha256(data));
         payload.put("mime", mime);
         payload.put("sizeBytes", data.length);
-        if (name != null && !name.isEmpty()) payload.put("fileName", name.substring(0, Math.min(255, name.length())));
+        payload.put("fileName", attachmentName(mime));
         Result result = post("/attachments/presign", payload, credential);
         if (result.status != 200) throw new IllegalStateException("Presign HTTP " + result.status + ": " + result.text);
         JSONObject reply = result.json();

@@ -154,30 +154,33 @@ public class FutatabiHomeActivity extends Activity {
     }
 
     private Response invoke(String method, String path, JSONObject payload) throws Exception {
-        URL url = new URL("http://127.0.0.1:18765" + path);
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setConnectTimeout(2500);
-        conn.setReadTimeout(25000);
-        conn.setRequestMethod(method);
-        conn.setInstanceFollowRedirects(false);
-        String token = getSharedPreferences(STORE, MODE_PRIVATE).getString("local_token", "");
-        conn.setRequestProperty("X-Futatabi-Token", token);
-        if (payload != null) {
-            byte[] bytes = payload.toString().getBytes(StandardCharsets.UTF_8);
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setDoOutput(true);
-            conn.setFixedLengthStreamingMode(bytes.length);
-            try (OutputStream out = conn.getOutputStream()) { out.write(bytes); }
-        }
-        try {
-            int code = conn.getResponseCode();
-            InputStream stream = code < 400 ? conn.getInputStream() : conn.getErrorStream();
-            if (stream == null) return new Response(code, "");
-            try (InputStream in = stream) {
-                byte[] content = AimogeWriteClient.bounded(in, 2_000_000);
-                return new Response(code, new String(content, StandardCharsets.UTF_8));
+        // Use the same verified socket for the request; no reconnect or redirect may
+        // send the local token or body to another process occupying the port.
+        try (java.net.Socket socket = BridgeServer.connectVerified()) {
+            String token = getSharedPreferences(STORE, MODE_PRIVATE).getString("local_token", "");
+            if (!token.matches("[A-Za-z0-9_-]+")) throw new java.io.IOException("Invalid local token");
+            byte[] bytes = payload == null ? new byte[0] : payload.toString().getBytes(StandardCharsets.UTF_8);
+            String headers = method + " " + path + " HTTP/1.1\r\nHost: 127.0.0.1:18765\r\n" +
+                    "X-Futatabi-Token: " + token + "\r\nConnection: close\r\n" +
+                    (payload == null ? "" : "Content-Type: application/json\r\nContent-Length: " + bytes.length + "\r\n") + "\r\n";
+            OutputStream out = socket.getOutputStream();
+            out.write(headers.getBytes(StandardCharsets.US_ASCII));
+            out.write(bytes);
+            out.flush();
+            InputStream in = new java.io.BufferedInputStream(socket.getInputStream());
+            String first = BridgeServer.readLine(in, 2048);
+            if (first == null || !first.matches("HTTP/1\\.1 [0-9]{3} .+")) throw new java.io.IOException("Invalid bridge response");
+            int code = Integer.parseInt(first.substring(9, 12));
+            boolean ended = false;
+            for (int i = 0; i < 50; i++) {
+                String line = BridgeServer.readLine(in, 8192);
+                if (line == null) throw new java.io.IOException("Incomplete bridge headers");
+                if (line.isEmpty()) { ended = true; break; }
             }
-        } finally { conn.disconnect(); }
+            if (!ended) throw new java.io.IOException("Too many bridge headers");
+            byte[] content = AimogeWriteClient.bounded(in, 2_000_000);
+            return new Response(code, new String(content, StandardCharsets.UTF_8));
+        }
     }
 
     private void home() {

@@ -68,6 +68,7 @@ public final class AimogePostContractTest {
                     r.put("algorithm","SHA-256").put("challenge",challenge()).put("salt",SALT).put("signature",SIGNATURE).put("maxnumber",100);
                 } else if (url.getPath().equals("/attachments/presign")) {
                     check(TOKEN.equals(headers.get("x-aimg-token")),"presign credential");
+                    check("attachment.jpg".equals(new JSONObject(data.toString("UTF-8")).getString("fileName")),"normalized attachment name");
                     r.put("attachmentId",ATTACHMENT).put("reused",true);
                 } else throw new AssertionError("unexpected path");
                 return new ByteArrayInputStream(r.toString().getBytes(StandardCharsets.UTF_8));
@@ -95,7 +96,7 @@ public final class AimogePostContractTest {
         check(send(api,p).status==403 && attempts==1 && challenges==2,"reply request checked, no success");
         p.remove("threadId");
         p.put("body", "fixture");
-        p.put("attachments",new JSONArray().put(new JSONObject().put("base64","AQID").put("mime","image/jpeg")));
+        p.put("attachments",new JSONArray().put(new JSONObject().put("base64","AQID").put("mime","image/jpeg").put("name","private-fixture-name.jpg")));
         expectedPath[0]="/threads/aimg";
         check(send(api,p).status==403 && attempts==2 && presigns==1 && challenges==3,"new thread request checked, no success");
         System.out.println("PASS: missing credential, required image, challenge failure, reply and new-thread request construction, explicit upstream failure propagation; synthetic transport only");

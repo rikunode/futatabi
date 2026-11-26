@@ -292,7 +292,7 @@ final class AnimanchAdapter {
                 if (!mime.matches("image/(png|jpeg|gif|webp)"))
                     return BridgeServer.BridgeResponse.text(400, "Unsupported image format");
                 String boundary = "futatabi" + System.nanoTime();
-                byte[] multipart = multipart(boundary, file.optString("name", "image.jpg"), mime,
+                byte[] multipart = multipart(boundary, AimogeWriteClient.attachmentName(mime), mime,
                         bytes, number, thread);
                 NetworkResponse upload = transmit("POST", HOST + "/upload/", multipart,
                         "multipart/form-data; boundary=" + boundary, referer);

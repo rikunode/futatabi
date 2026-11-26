@@ -34,6 +34,8 @@ import java.util.regex.Pattern;
  */
 final class AnimanchAdapter {
     private static final String HOST = "https://bbs.animanch.com";
+    // Official main.js uploadCheck maxSize (captured 2026-11-23): 5 MiB.
+    static final int MAX_IMAGE_BYTES = 5_242_880;
     private static final Charset SJIS = Charset.forName("Shift_JIS");
     private static final Pattern CARD = Pattern.compile(
             "<a\\s+[^>]*href=['\"](?:https://bbs\\.animanch\\.com)?/board/(\\d+)/['\"][^>]*class=['\"]card['\"][^>]*>(.*?)</a>",
@@ -258,13 +260,26 @@ final class AnimanchAdapter {
             String text = fields.optString("body", "");
             String category = fields.optString("category", "");
             JSONArray attachments = fields.optJSONArray("attachments");
+            byte[] attachmentBytes = null;
+            String attachmentMime = null;
             if (text.isEmpty() || text.length() > 1000)
                 return BridgeServer.BridgeResponse.text(400, "Body must be 1-1000 characters");
-            if (threadId.isEmpty() && (title.isEmpty() || category.isEmpty() ||
-                    attachments == null || attachments.length() == 0))
-                return BridgeServer.BridgeResponse.text(400, "New thread requires title, category and image");
             if (attachments != null && attachments.length() > 1)
                 return BridgeServer.BridgeResponse.text(400, "This version supports one image per post");
+            // Validate the official 5 MiB limit and MIME before comment.php can create
+            // a text-only thread. The site uploads the image in a separate later request.
+            if (attachments != null && attachments.length() == 1) {
+                JSONObject file = attachments.getJSONObject(0);
+                attachmentBytes = android.util.Base64.decode(
+                        file.getString("base64"), android.util.Base64.DEFAULT);
+                attachmentMime = file.optString("mime", "");
+                if (attachmentBytes.length == 0 || attachmentBytes.length > MAX_IMAGE_BYTES)
+                    return BridgeServer.BridgeResponse.text(400, "Animanch images must be 5 MiB or smaller; nothing was posted");
+                if (!attachmentMime.matches("image/(png|jpeg|gif|webp)"))
+                    return BridgeServer.BridgeResponse.text(400, "Unsupported Animanch image format; nothing was posted");
+            }
+            if (threadId.isEmpty() && (title.isEmpty() || category.isEmpty() || attachmentBytes == null))
+                return BridgeServer.BridgeResponse.text(400, "New thread requires title, category and image");
             String actualThread = threadId.isEmpty() ? "" : prefs.getString("board." + threadId, null);
             if (!threadId.isEmpty() && actualThread == null)
                 return BridgeServer.BridgeResponse.text(404, "Unknown reply thread");
@@ -294,25 +309,32 @@ final class AnimanchAdapter {
             String jump = accepted.optString("jump", "");
             if (number.isEmpty() || thread.isEmpty() || jump.isEmpty())
                 return BridgeServer.BridgeResponse.text(503, "Post response lacks required fields");
-            if (attachments != null && attachments.length() > 0) {
-                JSONObject file = attachments.getJSONObject(0);
-                byte[] bytes = android.util.Base64.decode(file.getString("base64"), android.util.Base64.DEFAULT);
-                if (bytes.length == 0 || bytes.length > 8_000_000)
-                    return BridgeServer.BridgeResponse.text(400, "Attachment exceeds size limit");
-                String mime = file.optString("mime", "");
-                if (!mime.matches("image/(png|jpeg|gif|webp)"))
-                    return BridgeServer.BridgeResponse.text(400, "Unsupported image format");
+            if (attachmentBytes != null) {
                 String boundary = "futatabi" + System.nanoTime();
-                byte[] multipart = multipart(boundary, AimogeWriteClient.attachmentName(mime), mime,
-                        bytes, number, thread);
-                NetworkResponse upload = transmit("POST", HOST + "/upload/", multipart,
-                        "multipart/form-data; boundary=" + boundary, referer);
-                if (upload.status != 200) {
+                byte[] multipart = multipart(boundary, AimogeWriteClient.attachmentName(attachmentMime),
+                        attachmentMime, attachmentBytes, number, thread);
+                NetworkResponse upload;
+                try {
+                    upload = transmit("POST", HOST + "/upload/", multipart,
+                            "multipart/form-data; boundary=" + boundary, referer);
+                } catch (Exception ex) {
                     JSONObject partial = new JSONObject();
                     partial.put("postAccepted", true);
                     partial.put("attachmentUploaded", false);
                     partial.put("number", number);
                     partial.put("thread", thread);
+                    partial.put("uploadHttpStatus", 0);
+                    partial.put("error", "Upload transport failed: " + ex.getClass().getSimpleName());
+                    return BridgeServer.BridgeResponse.json(409, partial.toString());
+                }
+                // Official jQuery .done() accepts successful 2xx responses, not only HTTP 200.
+                if (upload.status < 200 || upload.status >= 300) {
+                    JSONObject partial = new JSONObject();
+                    partial.put("postAccepted", true);
+                    partial.put("attachmentUploaded", false);
+                    partial.put("number", number);
+                    partial.put("thread", thread);
+                    partial.put("uploadHttpStatus", upload.status);
                     partial.put("error", boundedError(upload));
                     return BridgeServer.BridgeResponse.json(409, partial.toString());
                 }
@@ -367,6 +389,8 @@ final class AnimanchAdapter {
             }
             connection.setDoOutput(true);
             connection.setRequestProperty("Content-Type", type);
+            if (type.startsWith("multipart/form-data"))
+                connection.setRequestProperty("Accept", "text/html, */*; q=0.01");
             connection.setFixedLengthStreamingMode(body.length);
         }
         try {
@@ -550,14 +574,15 @@ final class AnimanchAdapter {
     private static byte[] multipart(String boundary, String name, String mime,
                                     byte[] file, String number, String thread) throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        part(out, boundary, "upname", number);
-        part(out, boundary, "thread", thread);
+        // Match the official #upform DOM/FormData order: file1, upname, thread.
         String safeName = name.replace("\\", "_").replace("\"", "_").replace("\r", "_").replace("\n", "_");
         String header = "--" + boundary + "\r\nContent-Disposition: form-data; name=\"file1\"; filename=\"" +
                 safeName + "\"\r\nContent-Type: " + mime + "\r\n\r\n";
         out.write(header.getBytes(StandardCharsets.UTF_8));
         out.write(file);
         out.write("\r\n".getBytes(StandardCharsets.US_ASCII));
+        part(out, boundary, "upname", number);
+        part(out, boundary, "thread", thread);
         out.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.US_ASCII));
         return out.toByteArray();
     }

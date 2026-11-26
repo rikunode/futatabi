@@ -32,7 +32,7 @@ public final class MebukiLoginActivity extends Activity {
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
-        setTitle("めぶきログイン");
+        setTitle("めぶきちゃんねるログイン");
         if (getActionBar() != null) getActionBar().hide();
         if (android.os.Build.VERSION.SDK_INT >= 30) getWindow().setDecorFitsSystemWindows(false);
         LinearLayout layout = new LinearLayout(this);
@@ -93,7 +93,7 @@ public final class MebukiLoginActivity extends Activity {
         inspect.setOnClickListener(view -> inspectContract(slug.getText().toString().trim()));
         controls.addView(inspect);
         cancel = new Button(this);
-        cancel.setText("認証を中止してめぶきへ戻る");
+        cancel.setText("認証を中止してめぶきちゃんねるへ戻る");
         cancel.setOnClickListener(view -> {
             if (busy || browser == null) return;
             providerVisited = false;
@@ -266,9 +266,9 @@ public final class MebukiLoginActivity extends Activity {
             case X: label = "Xの公式ドメイン：認証・追加認証は本人操作。結果未確認。"; break;
             case DISCORD: label = "Discordの公式ドメイン：認証・追加認証は本人操作。結果未確認。"; break;
             case GOOGLE_UNSUPPORTED: label = "Googleは対象外です。資格情報を入力せず戻ってください。"; break;
-            case CALLBACK: label = "めぶきへのcallbackを検出。認証成功は未確認。"; break;
-            case ERROR_RETURN: label = "めぶきから認証エラーの戻りを検出。成功は未確認。"; break;
-            case SITE: label = "めぶき公式サイト：自動確認が完了しない場合は管理欄で手動確認。"; break;
+            case CALLBACK: label = "めぶきちゃんねるへのcallbackを検出。認証成功は未確認。"; break;
+            case ERROR_RETURN: label = "めぶきちゃんねるから認証エラーの戻りを検出。成功は未確認。"; break;
+            case SITE: label = "めぶきちゃんねる公式サイト：自動確認が完了しない場合は管理欄で手動確認。"; break;
             default: label = "未確認のページ：資格情報を入力せず、必要に応じて戻ってください。";
         }
         navigation.setText((loading ? "読み込み中：" : "") + label);
@@ -288,7 +288,7 @@ public final class MebukiLoginActivity extends Activity {
         String current = browser.getUrl();
         Uri uri = current == null ? null : Uri.parse(current);
         if (uri == null || !"https".equals(uri.getScheme()) || !"mebuki.moe".equals(uri.getHost())) {
-            status.setText("めぶき公式サイトに戻ってから確認してください。");
+            status.setText("めぶきちゃんねる公式サイトに戻ってから確認してください。");
             return;
         }
         String cookies = CookieManager.getInstance().getCookie(SITE);
@@ -318,7 +318,7 @@ public final class MebukiLoginActivity extends Activity {
                         state == MebukiSession.State.AUTHENTICATED ? "認証済みですが端末への保存に失敗しました。" :
                         "保存未完了：" + state.name());
                 if (persisted) {
-                    android.widget.Toast.makeText(this, "めぶきの認証を保存しました", android.widget.Toast.LENGTH_LONG).show();
+                    android.widget.Toast.makeText(this, "めぶきちゃんねるの認証を保存しました", android.widget.Toast.LENGTH_LONG).show();
                     setResult(RESULT_OK);
                     finish();
                 }

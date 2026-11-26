@@ -133,7 +133,7 @@ final class MebukiAdapter {
     private byte[] catalog() throws Exception {
         JSONArray items = threadsJson().getJSONArray("threads");
         StringBuilder html = new StringBuilder("<html><head><meta charset='Shift_JIS'></head><body>");
-        html.append("<small>めぶき おためし（5分遅延／スレ本文はログイン後に要確認）</small>");
+        html.append("<small>めぶきちゃんねる おためし（5分遅延／スレ本文はログイン後に要確認）</small>");
         html.append("<table id='cattable'><tr>");
         for (int i = 0; i < items.length(); i++) {
             JSONObject item = items.getJSONObject(i);
@@ -156,9 +156,9 @@ final class MebukiAdapter {
                 + "<title>futatabi notice</title></head><body><div class='thre' data-res='" + id + "'>"
                 + "<span class='csb'>futatabi</span>Name <span class='cnm'>アプリからの案内</span>"
                 + "<span class='cnw'>-</span><span class='cno'>No." + id + "</span>"
-                + "<blockquote>めぶきの認証済み本文は専用画面で表示します。<br>"
-                + "拡張ホームのめぶきログインで認証・保存を確認してください。<br>"
-                + "下のリンクを押して本文を開く。または拡張ホームの「めぶき：本文を読む」へ。<br>"
+                + "<blockquote>めぶきちゃんねるの認証済み本文は専用画面で表示します。<br>"
+                + "拡張ホームのめぶきちゃんねるログインで認証・保存を確認してください。<br>"
+                + "下のリンクを押して本文を開く。または拡張ホームの「めぶきちゃんねる：本文を読む」へ。<br>"
                 + "<a href='https://futatabi.invalid/mebuki/" + id + "'>https://futatabi.invalid/mebuki/" + id + "</a>"
                 + "</blockquote></div></body></html>").getBytes(SJIS);
     }

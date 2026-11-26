@@ -98,7 +98,7 @@ public final class FutatabiProvider extends ContentProvider {
         change |= ensureBoard(items, "二次元裏（may)", MAY, true);
         change |= ensureBoard(items, "あいもげ", AIMOGE, false);
         change |= ensureBoard(items, "あにまん", ANIMANCH, false);
-        change |= ensureBoard(items, "めぶき", MEBUKI, false);
+        change |= ensureBoard(items, "めぶきちゃんねる", MEBUKI, true);
         return change ? FLUTTER_PREFIX + items.toString() : raw;
     }
 

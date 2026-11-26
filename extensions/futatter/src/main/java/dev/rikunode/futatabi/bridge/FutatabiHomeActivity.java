@@ -191,7 +191,7 @@ public class FutatabiHomeActivity extends Activity {
             try {
                 JSONObject state = new JSONObject(result.body);
                 boolean loggedIn = state.optBoolean("aimoge");
-                updateNotice("あいもげ：" + (loggedIn ? "ログイン中" : "未ログイン") + "\nめぶき：" + state.optString("mebukiSessionState", "UNVERIFIED"));
+                updateNotice("あいもげ：" + (loggedIn ? "ログイン中" : "未ログイン") + "\nめぶきちゃんねる：" + state.optString("mebukiSessionState", "UNVERIFIED"));
             } catch (Exception ex) { updateNotice("状態を確認できませんでした"); }
         });
         addText("あいもげ");
@@ -204,11 +204,11 @@ public class FutatabiHomeActivity extends Activity {
         addText("あにまん（ログイン画面なし／PHPセッションを保持）");
         action("あにまん：新規スレ", () -> composeAnimanch(""));
         action("あにまん：スレ一覧から返信", () -> threadPicker("animanch"));
-        addText("めぶき：おためしカタログは5分遅延。新規スレ・添付は未対応。");
-        action("めぶき：X／Discordログイン（本人操作）", () ->
+        addText("めぶきちゃんねる：おためしカタログは5分遅延。新規スレ・添付は未対応。");
+        action("めぶきちゃんねる：X／Discordログイン（本人操作）", () ->
                 startActivityForResult(new Intent(this, MebukiLoginActivity.class), MEBUKI_LOGIN));
-        action("めぶき：本文を読む", this::mebukiReaderPicker);
-        action("めぶき：一覧からレス投稿", () -> threadPicker("mebuki"));
+        action("めぶきちゃんねる：本文を読む", this::mebukiReaderPicker);
+        action("めぶきちゃんねる：一覧からレス投稿", () -> threadPicker("mebuki"));
         action("\u3081\u3076\u304d\uff1a\u6295\u7a3f\u8a3a\u65ad",this::mebukiPostDiagnostic);
     }
 
@@ -239,7 +239,7 @@ public class FutatabiHomeActivity extends Activity {
     }
 
     private void mebukiReaderPicker() {
-        startPage("めぶき • 本文を読む");
+        startPage("めぶきちゃんねる • 本文を読む");
         action("戻る", this::home);
         final LinearLayout page = root;
         remote("カタログを取得", "GET", "/ext/threads?board=mebuki", null, result -> {
@@ -261,7 +261,7 @@ public class FutatabiHomeActivity extends Activity {
 
     private void threadPicker(String board) {
         startPage(("animanch".equals(board) ? "あにまん" :
-                "mebuki".equals(board) ? "めぶき（おためし／遅延）" : "あいもげ") + " • 返信するスレを選ぶ");
+                "mebuki".equals(board) ? "めぶきちゃんねる（おためし／遅延）" : "あいもげ") + " • 返信するスレを選ぶ");
         action("戻る", this::home);
         remote("スレ一覧を取得", "GET", "/ext/threads?board=" + board, null, result -> {
             if (result.status != 200) { updateNotice("取得失敗 HTTP " + result.status); return; }
@@ -450,7 +450,7 @@ public class FutatabiHomeActivity extends Activity {
     }
 
     private void composeMebuki(String replyTo) {
-        startPage("めぶき • レス投稿（契約検収前）");
+        startPage("めぶきちゃんねる • レス投稿（契約検収前）");
         action("戻る", () -> threadPicker("mebuki"));
         addText("おためしカタログのスレです。実サイト側での返信可否は本人検収待ち。");
         final EditText content = input("本文（最大5,000文字／100行）", "", true);
@@ -477,7 +477,7 @@ public class FutatabiHomeActivity extends Activity {
                 body.put("showUsername", username.isChecked());
                 body.put("showThreadOwner", threadOwner.isChecked());
             } catch (Exception ex) { updateNotice("入力内容を作成できませんでした"); return; }
-            remote("めぶきへレス投稿", "POST", "/ext/mebuki/reply", body, result -> {
+            remote("めぶきちゃんねるへレス投稿", "POST", "/ext/mebuki/reply", body, result -> {
                 if (result.status == 201) {
                     startPage("\u6295\u7a3f\u3092\u78ba\u8a8d\u3057\u307e\u3057\u305f");
                     action("\u30db\u30fc\u30e0\u3078", this::home);

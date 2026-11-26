@@ -1,7 +1,7 @@
 {
-    "created_at":  "2026-11-26T21:16:19",
-    "description":  "Fix Mebuki attachment preview confirmation after official filename normalization",
-    "download_url":  "https://github.com/rikunode/futatabi/releases/download/v0.4.0-beta.31/futatabi-patches-v0.4.0-beta.31.mpp",
+    "created_at":  "2026-11-26T23:31:25",
+    "description":  "Align Animanch image upload with official 2xx success, multipart order and 5 MiB preflight",
+    "download_url":  "https://github.com/rikunode/futatabi/releases/download/v0.4.0-beta.32/futatabi-patches-v0.4.0-beta.32.mpp",
     "signature_download_url":  "",
-    "version":  "0.4.0-beta.31"
+    "version":  "0.4.0-beta.32"
 }

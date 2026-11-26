@@ -43,7 +43,7 @@ final class MebukiActionResponse {
         try{
             java.net.URI u=java.net.URI.create("https://mebuki.moe").resolve(location);
             if("https".equals(u.getScheme())&&"mebuki.moe".equals(u.getHost())&&u.getRawUserInfo()==null&&
-                    (u.getPort()==-1||u.getPort()==443)&&("/t/"+slug).equals(u.getRawPath()))
+                    (u.getPort()==-1||u.getPort()==443)&&MebukiReplyClient.threadPath(slug).equals(u.getRawPath()))
                 return Kind.SAME_THREAD_REDIRECT;
         }catch(Exception ignored){}
         return Kind.OTHER_REDIRECT;

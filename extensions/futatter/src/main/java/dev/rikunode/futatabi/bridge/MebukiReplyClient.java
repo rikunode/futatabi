@@ -22,6 +22,12 @@ final class MebukiReplyClient {
         this.adapter = adapter;
     }
 
+    // Manifest: app (parent) / pathless _main / t/:tslug (hasAction).
+    static String threadPath(String slug){
+        if(slug==null||!slug.matches("[A-Za-z0-9_-]{8,24}"))throw new IllegalArgumentException("Invalid thread slug");
+        return "/app/t/"+slug;
+    }
+
     synchronized BridgeServer.BridgeResponse reply(JSONObject payload) throws Exception {
         MebukiPostDiagnostic diag=new MebukiPostDiagnostic(context);
         try{return reply(payload,diag);}finally{diag.save();}
@@ -77,7 +83,8 @@ final class MebukiReplyClient {
         append(buffer, boundary, "showThreadOwner", payload.optBoolean("showThreadOwner", false) ? "on" : "");
         buffer.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
 
-        URL url = new URL(SITE + "/t/" + slug + ".data");
+        String documentPath=threadPath(slug);
+        URL url = new URL(SITE + documentPath + ".data");
         if (!("https".equals(url.getProtocol()) && "mebuki.moe".equals(url.getHost())))
             throw new IllegalArgumentException("Unexpected submission host");
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
@@ -106,7 +113,7 @@ final class MebukiReplyClient {
         connection.setUseCaches(false);
         connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
         connection.setRequestProperty("Origin", SITE);
-        connection.setRequestProperty("Referer", SITE + "/t/" + slug);
+        connection.setRequestProperty("Referer", SITE + documentPath);
         connection.setRequestProperty("Accept", "*/*");
         // Match the Android WebView used for the owner-operated login.
         // No synthetic Sec-Fetch or anti-bot headers, no challenge bypass.
@@ -140,7 +147,7 @@ final class MebukiReplyClient {
             }
             diag.kind=MebukiActionResponse.classify(status,connection.getContentType(),diag.router,redirect,challenge,response,slug);
             diag.save();
-            if(status==401||status==403||status==429||status==400||status==422)
+            if(status==401||status==403||status==429||status==400||status==405||status==422)
                 return failure(status,"Action rejected");
             if(status>=400||diag.kind==MebukiActionResponse.Kind.ROUTER_ERROR||
                     diag.kind==MebukiActionResponse.Kind.CHALLENGE||

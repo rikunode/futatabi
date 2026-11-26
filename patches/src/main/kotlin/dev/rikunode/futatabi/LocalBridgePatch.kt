@@ -116,6 +116,18 @@ private val bridgeManifestPatch = resourcePatch {
                 activity.setAttribute("android:configChanges", "orientation|screenSize|keyboardHidden")
                 application.appendChild(activity)
             }
+            val animanchPicker = "dev.rikunode.futatabi.bridge.AnimanchNewThreadActivity"
+            if ((0 until matching.length).none {
+                    (matching.item(it) as? Element)?.getAttribute("android:name") == animanchPicker
+                }
+            ) {
+                val activity = document.createElement("activity")
+                activity.setAttribute("android:name", animanchPicker)
+                activity.setAttribute("android:exported", "false")
+                activity.setAttribute("android:label", "あにまん")
+                activity.setAttribute("android:configChanges", "orientation|screenSize|keyboardHidden")
+                application.appendChild(activity)
+            }
         }
     }
 }

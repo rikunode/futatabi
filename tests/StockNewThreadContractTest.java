@@ -14,6 +14,8 @@ public final class StockNewThreadContractTest {
     static final Map<String,String> HEADERS=Map.of("host","127.0.0.1:18765","content-type","multipart/form-data; boundary="+B);
     static int aim,pre,anim,upload,reads,handoffs,sessionReads;
     static MebukiNewThreadDraft captured;
+    static AnimanchNewThreadDraft animDraft;
+    static int pickers;
     static boolean badRead,failUpload;
     static String expectedCategory="7";
     static int animFormGets;
@@ -34,6 +36,9 @@ public final class StockNewThreadContractTest {
         BridgeServer.BridgeResponse r=s.submit("/"+board+"/futaba.php?guid=on",HEADERS,form);
         check(r.status==200,"stock response HTTP");
         return new String(r.bytes,java.nio.charset.Charset.forName("Shift_JIS"));
+    }
+    static String draftResult(AnimanchNewThreadDraft draft,int id){
+        return new String(draft.choose(id).bytes,java.nio.charset.Charset.forName("Shift_JIS"));
     }
     static final class Mock extends HttpURLConnection {
         ByteArrayOutputStream out=new ByteArrayOutputStream();
@@ -108,6 +113,9 @@ public final class StockNewThreadContractTest {
         StockReply stock=new StockReply(a,b,api,draft->{
             handoffs++; captured=draft;
             return "確認画面を開きます。未送信です。";
+        },draft->{
+            pickers++;animDraft=draft;
+            return "カテゴリを選択してください。まだ送信していません。";
         });
         check(!result(stock,"aimoge",form(null,"title","sage",true)).contains("\"status\":\"ok\"")&&aim==0,"no login");
         c.getSharedPreferences("futatabi_extension_private",0).edit().putString("credential",TOKEN).putLong("credential_expires",System.currentTimeMillis()+600000).commit();
@@ -123,32 +131,43 @@ public final class StockNewThreadContractTest {
             java.util.regex.Matcher m=java.util.regex.Pattern.compile("^\\| ([0-9]+) \\| (.+?) \\| (単発スレ|通常スレ|実況・安価など) \\|$").matcher(line);
             if(!m.matches())continue;
             categoryCount++;
-            check(m.group(1).equals(StockReplyRequest.animanchCategory(m.group(1))),"category number "+m.group(1));
-            check(m.group(1).equals(StockReplyRequest.animanchCategory(m.group(2))),"category name "+m.group(1));
+            int category=Integer.parseInt(m.group(1));
+            check(m.group(2).equals(StockReplyRequest.animanchCategoryName(category)),"category name "+category);
+            check(Arrays.stream(StockReplyRequest.animanchCategoryOrder()).anyMatch(n->n==category),"picker option "+category);
         }
         check(categoryCount==32,"all official category options");
-        check("7".equals(StockReplyRequest.animanchCategory("　 ")),"blank default");
-        check("32".equals(StockReplyRequest.animanchCategory("家庭用ゲーム 他")),"normalized name");
-        check("9".equals(StockReplyRequest.animanchCategory("型月（Fate・FGO・月姫など）")),"normalized parentheses");
-        for(String invalid:new String[]{"5","0","34","-1","07","sage","age","未知のカテゴリ","7&category=8"}){
-            String rejected=result(stock,"animanch",form(null,"title",invalid,true));
-            check(!rejected.contains("\"status\":\"ok\"")&&rejected.contains("カテゴリ指定が無効"),"invalid category error: "+invalid);
+        int[] order=StockReplyRequest.animanchCategoryOrder();
+        check(order.length==32&&order[0]==7&&Arrays.stream(order).distinct().count()==32,"default first and no duplicate options");
+        for(int invalid:new int[]{-1,0,5,34})check(StockReplyRequest.animanchCategoryName(invalid)==null,"invalid category "+invalid);
+        for(String mail:new String[]{"8","sage","ブルーアーカイブ"}){
+            String rejected=result(stock,"animanch",form(null,"title",mail,true));
+            check(!rejected.contains("\"status\":\"ok\"")&&rejected.contains("メール欄を空欄"),"old mail entry rejected");
         }
-        check(animFormGets==0&&pre==0&&anim==0&&upload==0,"invalid categories never contact upstream");
-        check(!result(stock,"animanch",form(null,"title","",false)).contains("\"status\":\"ok\"")&&anim==0,"required image");
-        ok=result(stock,"animanch",form("0","title","",true));
+        check(animFormGets==0&&pre==0&&anim==0&&upload==0&&pickers==0,"invalid mail never opens picker or contacts upstream");
+        check(!result(stock,"animanch",form(null,"title","",false)).contains("\"status\":\"ok\"")&&pickers==0,"required image");
+        check(!result(stock,"animanch",form("0","title","",true)).contains("\"status\":\"ok\"")&&pickers==1&&animFormGets==0,"opening picker does not send");
+        check(!draftResult(animDraft,5).contains("\"status\":\"ok\"")&&animFormGets==0,"invalid selection does not send");
+        ok=draftResult(animDraft,7);
         id=new JSONObject(ok).getString("thisno");
-        check(id.matches("[1-9][0-9]{12}")&&BOARD.equals(b.stockThreadId(id))&&anim==1&&upload==1,"animanch upload and mapped thread");
+        check(id.matches("[1-9][0-9]{12}")&&BOARD.equals(b.stockThreadId(id))&&anim==1&&upload==1,"default sends and maps thread");
+        check(!draftResult(animDraft,7).contains("\"status\":\"ok\"")&&anim==1,"double tap cannot send twice");
         expectedCategory="8";
-        check(result(stock,"animanch",form(null,"title","８",true)).contains("\"status\":\"ok\"")&&anim==2&&upload==2,"numeric category reaches both POSTs");
+        result(stock,"animanch",form(null,"title","",true));
+        check(anim==1&&draftResult(animDraft,8).contains("\"status\":\"ok\"")&&anim==2&&upload==2,"selection reaches both POSTs");
         expectedCategory="33";
-        check(result(stock,"animanch",form("0","title","ブルーアーカイブ",true)).contains("\"status\":\"ok\"")&&anim==3&&upload==3,"named category reaches both POSTs");
+        result(stock,"animanch",form("0","title","",true));
+        check(anim==2&&draftResult(animDraft,33).contains("\"status\":\"ok\"")&&anim==3&&upload==3,"another selection reaches both POSTs");
+        result(stock,"animanch",form(null,"title","",true));
+        animDraft.cancel();
+        check(!draftResult(animDraft,7).contains("\"status\":\"ok\"")&&anim==3,"cancelled draft never sends");
         int beforeReply=animFormGets;
         String replyRejected=result(stock,"animanch",form(id,"","8",false));
         check(!replyRejected.contains("\"status\":\"ok\"")&&animFormGets==beforeReply&&anim==3,"reply email behavior unchanged");
         failUpload=true;
         expectedCategory="7";
-        check(!result(stock,"animanch",form(null,"title","",true)).contains("\"status\":\"ok\"")&&anim==4&&upload==4,"partial upload never reports success");
+        result(stock,"animanch",form(null,"title","",true));
+        check(!draftResult(animDraft,7).contains("\"status\":\"ok\"")&&anim==4&&upload==4,"partial upload never reports success");
+        check(!draftResult(animDraft,7).contains("\"status\":\"ok\"")&&anim==4,"failed draft cannot retry automatically");
         check(!result(stock,"mebuki",form(null,"title","",false)).contains("\"status\":\"ok\"")&&handoffs==0,"Mebuki missing image");
         check(!result(stock,"mebuki",form(null,"title","sage",true)).contains("\"status\":\"ok\"")&&handoffs==0,"Mebuki unsupported mail");
         check(!result(stock,"mebuki",form(null,"title","",true)).contains("\"status\":\"ok\"")&&handoffs==1,"Mebuki handoff is pending, not success");
@@ -171,6 +190,6 @@ public final class StockNewThreadContractTest {
                 .put("chunk",MebukiNewThreadDraft.chunkScript("fixture-draft","YWJj"))
                 .put("finish",captured.finishScript("fixture-draft")).toString());
         check(!result(stock,"aimoge",form("invalid","title","sage",true)).contains("\"status\":\"ok\"")&&aim==2,"invalid reply ID does not create");
-        System.out.println("PASS stock new thread: Aimoge credential, fields, image, OP readback; Animanch 32 official categories, default, numeric/name selection, invalid rejection, unchanged replies, precheck, image, readback, partial failure; Mebuki draft handoff without posting; malformed reply rejected. No live network.");
+        System.out.println("PASS stock new thread: Aimoge credential, fields, image, OP readback; Animanch 32 picker options, default, no send until selection, cancel/double-tap guard, invalid rejection, unchanged replies, precheck, image, readback, partial failure; Mebuki draft handoff without posting; malformed reply rejected. No live network.");
     }
 }

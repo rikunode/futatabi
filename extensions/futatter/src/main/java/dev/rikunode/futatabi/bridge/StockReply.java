@@ -11,9 +11,12 @@ final class StockReply {
     private final AnimanchAdapter animanch;
     private final ExtensionApi api;
     interface MebukiHandoff { String open(MebukiNewThreadDraft draft); }
+    interface AnimanchHandoff { String open(AnimanchNewThreadDraft draft); }
     private final MebukiHandoff handoff;
+    private final AnimanchHandoff categoryPicker;
     StockReply(AimogeAdapter a,AnimanchAdapter b,ExtensionApi e){this(a,b,e,draft->"めぶきの確認画面を開けません。未送信です。");}
-    StockReply(AimogeAdapter a,AnimanchAdapter b,ExtensionApi e,MebukiHandoff h){aimoge=a;animanch=b;api=e;handoff=h;}
+    StockReply(AimogeAdapter a,AnimanchAdapter b,ExtensionApi e,MebukiHandoff h){this(a,b,e,h,draft->"カテゴリ選択画面を開けません。未送信です。");}
+    StockReply(AimogeAdapter a,AnimanchAdapter b,ExtensionApi e,MebukiHandoff h,AnimanchHandoff picker){aimoge=a;animanch=b;api=e;handoff=h;categoryPicker=picker;}
     static boolean isPath(String path){
         return "/aimoge/futaba.php?guid=on".equals(path)||"/animanch/futaba.php?guid=on".equals(path)
                 ||"/mebuki/futaba.php?guid=on".equals(path);
@@ -42,6 +45,18 @@ final class StockReply {
             JSONObject payload;
             try{payload=request.payload(board,creating?"":a?source:id);}
             catch(IllegalArgumentException ex){return error(ex.getMessage());}
+            if(creating&&!a) {
+                try { return error(categoryPicker.open(new AnimanchNewThreadDraft(payload,
+                        selected->send(false,true,"","",selected)))); }
+                catch(IllegalArgumentException ex){return error(ex.getMessage());}
+            }
+            return send(a,creating,source,id,payload);
+        }catch(Exception ex){
+            return error("投稿結果を確認できません。再送前にスレを確認してください。");
+        }
+    }
+    private BridgeServer.BridgeResponse send(boolean a,boolean creating,String source,String id,JSONObject payload){
+        try{
             BridgeServer.BridgeResponse upstream=a?api.submit(payload):animanch.post(payload);
             if(upstream.status!=201){
                 if(upstream.status==409 && !a){
@@ -86,7 +101,7 @@ final class StockReply {
         if(result.status==503)return error("\u3081\u3076\u304d\u306e\u30bb\u30c3\u30b7\u30e7\u30f3\u307e\u305f\u306f\u30b9\u30ec\u3092\u78ba\u8a8d\u3067\u304d\u307e\u305b\u3093\u3002\u6295\u7a3f\u306f\u9001\u4fe1\u3057\u3066\u3044\u307e\u305b\u3093\u3002");
         return error("\u3081\u3076\u304d\u306e\u6295\u7a3f\u7d50\u679c\u304c\u672a\u78ba\u5b9a\u3067\u3059\u3002\u518d\u6295\u7a3f\u305b\u305a\u30b9\u30ec\u3092\u66f4\u65b0\u3057\u3066\u304f\u3060\u3055\u3044\u3002\u62e1\u5f35\u30db\u30fc\u30e0\u306e\u3081\u3076\u304d\u6295\u7a3f\u8a3a\u65ad\u3082\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002");
     }
-    private static BridgeServer.BridgeResponse error(String message){
+    static BridgeServer.BridgeResponse error(String message){
         // Stock client decodes Windows31J and treats non-success text as a failure.
         return new BridgeServer.BridgeResponse(200,"text/plain; charset=Shift_JIS",
                 message.getBytes(Charset.forName("Shift_JIS")));

@@ -103,19 +103,13 @@ final class StockReplyRequest {
         "サンデー・コロコロ漫画(小学館系)", "ロボット関連", "BLEACH(ブリーチ)", "家庭用ゲーム　他", "ブルーアーカイブ"
     };
 
-    private static String normalizeCategory(String value) {
-        return java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFKC).trim();
+    // Put the default first, then preserve the official form's order.
+    static int[] animanchCategoryOrder() {
+        return new int[]{7,4,11,29,28,18,1,16,14,15,19,26,31,17,30,27,8,9,10,13,2,25,33,3,32,24,22,12,23,6,21,20};
     }
 
-    static String animanchCategory(String input) {
-        String value = normalizeCategory(input);
-        if (value.isEmpty()) return "7";
-        for (int id = 1; id < ANIMANCH_CATEGORIES.length; id++) {
-            String name = ANIMANCH_CATEGORIES[id];
-            if (name != null && (Integer.toString(id).equals(value) || normalizeCategory(name).equals(value)))
-                return Integer.toString(id);
-        }
-        throw new IllegalArgumentException("あにまんのカテゴリ指定が無効です。メール欄に公式カテゴリ番号または名前を入力してください（空欄は7）。");
+    static String animanchCategoryName(int id) {
+        return id > 0 && id < ANIMANCH_CATEGORIES.length ? ANIMANCH_CATEGORIES[id] : null;
     }
 
     String get(String key){return fields.getOrDefault(key,"");}
@@ -127,7 +121,9 @@ final class StockReplyRequest {
             if(!get("name").isEmpty())throw new IllegalArgumentException("\u3042\u3044\u3082\u3052\u306e\u540d\u524d\u6b04\u306f\u672a\u5bfe\u5fdc");
             if(!email.isEmpty()&&!"sage".equalsIgnoreCase(email)&&!"age".equalsIgnoreCase(email))
                 throw new IllegalArgumentException("\u30e1\u30fc\u30eb\u6b04\u306f sage / age \u306e\u307f");
-        }else if(!email.isEmpty()&&!(creating&&"animanch".equals(board)))throw new IllegalArgumentException("\u3042\u306b\u307e\u3093\u306e\u30e1\u30fc\u30eb\u6b04\u306f\u672a\u5bfe\u5fdc");
+        }else if(creating&&"animanch".equals(board)&&!email.isEmpty()){
+            throw new IllegalArgumentException("あにまんのスレ立てではメール欄を空欄にしてください。カテゴリは次の画面で選択します。");
+        }else if(!email.isEmpty())throw new IllegalArgumentException("\u3042\u306b\u307e\u3093\u306e\u30e1\u30fc\u30eb\u6b04\u306f\u672a\u5bfe\u5fdc");
         String body=get("com");
         if(creating&&"aimoge".equals(board)){
             if("age".equalsIgnoreCase(email))throw new IllegalArgumentException("New Aimoge threads support sage, not age");
@@ -135,8 +131,8 @@ final class StockReplyRequest {
         }
         JSONObject p=new JSONObject().put("threadId",thread).put("body",body);
         if(creating&&"animanch".equals(board)){
-            // Only new threads interpret the stock mail field as a category.
-            p.put("title",get("sub")).put("category",animanchCategory(email));
+            // The native picker supplies the final category before sending.
+            p.put("title",get("sub")).put("category","7");
         }
         if("aimoge".equals(board)){
             p.put("deleteKey",get("pwd"));

@@ -15,6 +15,8 @@ public final class StockNewThreadContractTest {
     static int aim,pre,anim,upload,reads,handoffs,sessionReads;
     static MebukiNewThreadDraft captured;
     static boolean badRead,failUpload;
+    static String expectedCategory="7";
+    static int animFormGets;
     static void check(boolean ok,String label){if(!ok)throw new AssertionError(label);}
     static void part(ByteArrayOutputStream out,String key,String val)throws Exception{
         out.write(("--"+B+"\r\nContent-Disposition: form-data; name=\""+key+"\"\r\n\r\n"+val+"\r\n").getBytes(StandardCharsets.UTF_8));
@@ -67,10 +69,11 @@ public final class StockNewThreadContractTest {
                     reads++;response=new JSONObject().put("posts",new JSONArray().put(new JSONObject().put("id",badRead?ATT:OP).put("threadId",THREAD).put("seq",0).put("postSequenceNo",123L))).toString();
                 }else throw new AssertionError("unmocked aimoge "+p);
             }else if(url.getHost().equals("bbs.animanch.com")){
-                if(p.equals("/")&&"GET".equals(method))response="";
+                if(p.equals("/")&&"GET".equals(method)){animFormGets++;response="";}
                 else if(p.equals("/inc/comment.php?preCheck")||p.equals("/inc/comment.php")){
                     check("POST".equals(method)&&"PHPSESSID=fixture_only".equals(headers.get("cookie")),"session");
-                    check(data.contains("title=title")&&data.contains("category=7")&&data.contains("text=fixture")&&data.contains("thread=")&&!data.contains("thread="+BOARD),"new form fields");
+                    check(data.contains("title=title")&&Arrays.asList(data.split("&")).contains("category="+expectedCategory)&&data.contains("text=fixture")&&data.contains("thread=")&&!data.contains("thread="+BOARD),"new form fields");
+                    check(!data.contains("email="),"category only, not upstream email");
                     if(p.endsWith("preCheck")){pre++;response="{}";}
                     else{anim++;check(pre==anim,"precheck first");response="{\"number\":\"1\",\"thread\":\""+BOARD+"\",\"jump\":\"https://bbs.animanch.com/board/"+BOARD+"/\"}";}
                 }else if(p.equals("/upload/")){
@@ -114,13 +117,38 @@ public final class StockNewThreadContractTest {
         check(id.matches("[1-9][0-9]{12}")&&THREAD.equals(a.stockThreadUuid(id))&&aim==1&&reads==1,"aimoge OP readback and mapped thread");
         badRead=true;
         check(!result(stock,"aimoge",form("0","title","sage",true)).contains("\"status\":\"ok\"")&&aim==2,"unmatched OP never reports success");
-        check(!result(stock,"animanch",form(null,"title","7",true)).contains("\"status\":\"ok\"")&&anim==0,"email is not a category field");
+        // README contains the complete official form option list. Check every name and ID.
+        int categoryCount=0;
+        for(String line:java.nio.file.Files.readAllLines(java.nio.file.Path.of("README.md"),StandardCharsets.UTF_8)){
+            java.util.regex.Matcher m=java.util.regex.Pattern.compile("^\\| ([0-9]+) \\| (.+?) \\| (単発スレ|通常スレ|実況・安価など) \\|$").matcher(line);
+            if(!m.matches())continue;
+            categoryCount++;
+            check(m.group(1).equals(StockReplyRequest.animanchCategory(m.group(1))),"category number "+m.group(1));
+            check(m.group(1).equals(StockReplyRequest.animanchCategory(m.group(2))),"category name "+m.group(1));
+        }
+        check(categoryCount==32,"all official category options");
+        check("7".equals(StockReplyRequest.animanchCategory("　 ")),"blank default");
+        check("32".equals(StockReplyRequest.animanchCategory("家庭用ゲーム 他")),"normalized name");
+        check("9".equals(StockReplyRequest.animanchCategory("型月（Fate・FGO・月姫など）")),"normalized parentheses");
+        for(String invalid:new String[]{"5","0","34","-1","07","sage","age","未知のカテゴリ","7&category=8"}){
+            String rejected=result(stock,"animanch",form(null,"title",invalid,true));
+            check(!rejected.contains("\"status\":\"ok\"")&&rejected.contains("カテゴリ指定が無効"),"invalid category error: "+invalid);
+        }
+        check(animFormGets==0&&pre==0&&anim==0&&upload==0,"invalid categories never contact upstream");
         check(!result(stock,"animanch",form(null,"title","",false)).contains("\"status\":\"ok\"")&&anim==0,"required image");
         ok=result(stock,"animanch",form("0","title","",true));
         id=new JSONObject(ok).getString("thisno");
         check(id.matches("[1-9][0-9]{12}")&&BOARD.equals(b.stockThreadId(id))&&anim==1&&upload==1,"animanch upload and mapped thread");
+        expectedCategory="8";
+        check(result(stock,"animanch",form(null,"title","８",true)).contains("\"status\":\"ok\"")&&anim==2&&upload==2,"numeric category reaches both POSTs");
+        expectedCategory="33";
+        check(result(stock,"animanch",form("0","title","ブルーアーカイブ",true)).contains("\"status\":\"ok\"")&&anim==3&&upload==3,"named category reaches both POSTs");
+        int beforeReply=animFormGets;
+        String replyRejected=result(stock,"animanch",form(id,"","8",false));
+        check(!replyRejected.contains("\"status\":\"ok\"")&&animFormGets==beforeReply&&anim==3,"reply email behavior unchanged");
         failUpload=true;
-        check(!result(stock,"animanch",form(null,"title","",true)).contains("\"status\":\"ok\"")&&anim==2&&upload==2,"partial upload never reports success");
+        expectedCategory="7";
+        check(!result(stock,"animanch",form(null,"title","",true)).contains("\"status\":\"ok\"")&&anim==4&&upload==4,"partial upload never reports success");
         check(!result(stock,"mebuki",form(null,"title","",false)).contains("\"status\":\"ok\"")&&handoffs==0,"Mebuki missing image");
         check(!result(stock,"mebuki",form(null,"title","sage",true)).contains("\"status\":\"ok\"")&&handoffs==0,"Mebuki unsupported mail");
         check(!result(stock,"mebuki",form(null,"title","",true)).contains("\"status\":\"ok\"")&&handoffs==1,"Mebuki handoff is pending, not success");
@@ -143,6 +171,6 @@ public final class StockNewThreadContractTest {
                 .put("chunk",MebukiNewThreadDraft.chunkScript("fixture-draft","YWJj"))
                 .put("finish",captured.finishScript("fixture-draft")).toString());
         check(!result(stock,"aimoge",form("invalid","title","sage",true)).contains("\"status\":\"ok\"")&&aim==2,"invalid reply ID does not create");
-        System.out.println("PASS stock new thread: Aimoge credential, fields, image, OP readback; Animanch automatic category 7, precheck, image, readback, partial failure; Mebuki draft handoff without posting; malformed reply rejected. No live network.");
+        System.out.println("PASS stock new thread: Aimoge credential, fields, image, OP readback; Animanch 32 official categories, default, numeric/name selection, invalid rejection, unchanged replies, precheck, image, readback, partial failure; Mebuki draft handoff without posting; malformed reply rejected. No live network.");
     }
 }

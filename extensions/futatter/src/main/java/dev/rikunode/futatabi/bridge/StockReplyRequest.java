@@ -91,6 +91,33 @@ final class StockReplyRequest {
                 ||!"on".equals(result.fields.get("js"))||!result.fields.containsKey("com"))throw invalid();
         return result;
     }
+    // Official new-thread form, https://bbs.animanch.com/ (2026-11-23 capture).
+    // ID 5 is an announcement category, not an offered posting option.
+    private static final String[] ANIMANCH_CATEGORIES = {
+        null, "その他漫画", "アニメ", "ソシャゲ・ブラゲ", "その他ジャンル(二次元以外)", null,
+        "作品別", "その他話題", "ウマ娘・競馬", "型月(Fate・FGO・月姫など)", "ポケモン",
+        "ジャンプ漫画(集英社系)", "小説(ラノベ・web小説など)", "アイドルマスター", "鬼滅の刃",
+        "呪術廻戦", "ワンピース", "ワールドトリガー", "マガジン漫画(講談社系)", "ヒロアカ",
+        "安価系", "実況", "特撮ヒーロー", "創作全般(絵・小説・ゲ制など)", "VTuber・2.5次元",
+        "カードゲーム(TCG・DCG)", "NARUTO・BORUTO", "TOUGH(タフ)", "チャンピオン漫画(秋田書店系)",
+        "サンデー・コロコロ漫画(小学館系)", "ロボット関連", "BLEACH(ブリーチ)", "家庭用ゲーム　他", "ブルーアーカイブ"
+    };
+
+    private static String normalizeCategory(String value) {
+        return java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFKC).trim();
+    }
+
+    static String animanchCategory(String input) {
+        String value = normalizeCategory(input);
+        if (value.isEmpty()) return "7";
+        for (int id = 1; id < ANIMANCH_CATEGORIES.length; id++) {
+            String name = ANIMANCH_CATEGORIES[id];
+            if (name != null && (Integer.toString(id).equals(value) || normalizeCategory(name).equals(value)))
+                return Integer.toString(id);
+        }
+        throw new IllegalArgumentException("あにまんのカテゴリ指定が無効です。メール欄に公式カテゴリ番号または名前を入力してください（空欄は7）。");
+    }
+
     String get(String key){return fields.getOrDefault(key,"");}
     JSONObject payload(String board,String thread)throws Exception{
         String email=get("email").trim();
@@ -100,7 +127,7 @@ final class StockReplyRequest {
             if(!get("name").isEmpty())throw new IllegalArgumentException("\u3042\u3044\u3082\u3052\u306e\u540d\u524d\u6b04\u306f\u672a\u5bfe\u5fdc");
             if(!email.isEmpty()&&!"sage".equalsIgnoreCase(email)&&!"age".equalsIgnoreCase(email))
                 throw new IllegalArgumentException("\u30e1\u30fc\u30eb\u6b04\u306f sage / age \u306e\u307f");
-        }else if(!email.isEmpty())throw new IllegalArgumentException("\u3042\u306b\u307e\u3093\u306e\u30e1\u30fc\u30eb\u6b04\u306f\u672a\u5bfe\u5fdc");
+        }else if(!email.isEmpty()&&!(creating&&"animanch".equals(board)))throw new IllegalArgumentException("\u3042\u306b\u307e\u3093\u306e\u30e1\u30fc\u30eb\u6b04\u306f\u672a\u5bfe\u5fdc");
         String body=get("com");
         if(creating&&"aimoge".equals(board)){
             if("age".equalsIgnoreCase(email))throw new IllegalArgumentException("New Aimoge threads support sage, not age");
@@ -108,9 +135,8 @@ final class StockReplyRequest {
         }
         JSONObject p=new JSONObject().put("threadId",thread).put("body",body);
         if(creating&&"animanch".equals(board)){
-            // General-purpose official category (通常スレ / その他話題).
-            // The official preCheck remains authoritative for acceptance.
-            p.put("title",get("sub")).put("category","7");
+            // Only new threads interpret the stock mail field as a category.
+            p.put("title",get("sub")).put("category",animanchCategory(email));
         }
         if("aimoge".equals(board)){
             p.put("deleteKey",get("pwd"));

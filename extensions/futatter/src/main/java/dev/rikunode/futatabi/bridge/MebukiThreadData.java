@@ -15,11 +15,11 @@ final class MebukiThreadData {
     private final long timestamp;
     private static final class NativePost {
         final String id, date, body, image, replyTo;
-        final boolean author, deleted;
+        final boolean author, deleted, hasAttachment;
         final Integer parent;
-        NativePost(String id, String date, String body, String image, Integer parent, String replyTo, boolean author, boolean deleted) {
+        NativePost(String id, String date, String body, String image, Integer parent, String replyTo, boolean author, boolean deleted, boolean hasAttachment) {
             this.id=id;this.date=date;this.body=body;this.image=image;this.parent=parent;
-            this.replyTo=replyTo;this.author=author;this.deleted=deleted;
+            this.replyTo=replyTo;this.author=author;this.deleted=deleted;this.hasAttachment=hasAttachment;
         }
     }
 
@@ -97,8 +97,10 @@ final class MebukiThreadData {
                     FutabaQuoteMarkup.render(esc(body).replace("\r\n","\n").replace("\r","\n").replace("\n","<br>")))
                     .append("</blockquote>");
             String nativeImage = null;
+            boolean hasAttachment = false;
             if (!deleted && post.get("attachments") != null) {
                 List<?> attachments = array(post.get("attachments"));
+                hasAttachment = !attachments.isEmpty();
                 if (attachments.size()>32) throw invalid();
                 for (Object item : attachments) {
                     String image = thumbnail(object(item));
@@ -112,7 +114,7 @@ final class MebukiThreadData {
             }
             nativePosts.add(new NativePost(string(post.get("id")), date, deleted ? "\u524a\u9664\u30fb\u975e\u8868\u793a\u306e\u30ec\u30b9" : body,
                     nativeImage, !deleted && to != null && to < i ? to : null, parent,
-                    Boolean.TRUE.equals(post.get("isAuthor")), deleted));
+                    Boolean.TRUE.equals(post.get("isAuthor")), deleted, hasAttachment));
             out.append("</article>");
             if (out.length()>2_000_000) throw invalid();
         }
@@ -165,6 +167,15 @@ final class MebukiThreadData {
         if(!p.replyTo.equals(parent))return new Confirmation(Match.PARENT_MISMATCH,null);
         if(MebukiTurboStream.dateMillis(p.date)<before.timestamp)return new Confirmation(Match.TIME_MISMATCH,null);
         return new Confirmation(Match.MATCHED,nativeNumber(thread,match));
+    }
+
+    /** Confirm the new OP, never infer success from a navigation alone. */
+    boolean matchesNewThread(String body,long startedAt) {
+        if (posts.isEmpty()) return false;
+        NativePost op=posts.get(0);
+        return op.author && !op.deleted && op.hasAttachment && op.replyTo.isEmpty() &&
+                MebukiTurboStream.dateMillis(op.date) >= startedAt &&
+                op.body.replace("\r\n","\n").replace('\r','\n').equals(body);
     }
 
     /** Futaba compatibility structure used by the stock thread parser. */

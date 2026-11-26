@@ -126,6 +126,21 @@ final class AimogeAdapter {
 
     String stockThreadUuid(String id) { return ids.threadUuid(id); }
 
+    synchronized String confirmedNewThread(JSONObject accepted) throws Exception {
+        String thread=java.util.UUID.fromString(accepted.getString("threadId")).toString();
+        if(accepted.getInt("seq")!=0||!"public".equals(accepted.getString("status")))return null;
+        String post=java.util.UUID.fromString(accepted.getString("postId")).toString();
+        JSONArray posts=new JSONObject(new String(fetch(API+"/thread/"+thread+"/public",0,true),StandardCharsets.UTF_8)).getJSONArray("posts");
+        for(int i=0;i<posts.length();i++){
+            JSONObject p=posts.getJSONObject(i);
+            if(post.equals(p.optString("id"))&&thread.equals(p.optString("threadId"))&&p.optInt("seq",-1)==0){
+                cache.remove(API+"/catalog/"+BOARD+"?sort=bump&limit=20&page=1");
+                return ids.threadId(thread);
+            }
+        }
+        return null;
+    }
+
     /** Only an actual returned UUID/seq and official public number can acknowledge a stock post. */
     synchronized String confirmedNumber(String thread, JSONObject accepted) throws Exception {
         String post = java.util.UUID.fromString(accepted.getString("postId")).toString();

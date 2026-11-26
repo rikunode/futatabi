@@ -48,6 +48,29 @@ final class MebukiSession {
         }
     }
 
+    /** Compare accounts without exposing or storing the account ID. */
+    static boolean sameAccount(String saved, String webView) {
+        if (!safeCookie(saved) || !safeCookie(webView)) return false;
+        String a = accountId(saved);
+        return a != null && (saved.equals(webView) || a.equals(accountId(webView)));
+    }
+
+    private static String accountId(String cookie) {
+        try {
+            HttpURLConnection c = connect("/api/auth/get-session", cookie);
+            try {
+                if (c.getResponseCode() != 200) return null;
+                try (InputStream in = c.getInputStream()) {
+                    JSONObject result = new JSONObject(new String(AimogeWriteClient.bounded(in,64_000),StandardCharsets.UTF_8));
+                    JSONObject user = result.optJSONObject("user");
+                    if (user == null || result.optJSONObject("session") == null) return null;
+                    String id = user.optString("id", "");
+                    return id.isEmpty() || id.length() > 256 ? null : id;
+                }
+            } finally { c.disconnect(); }
+        } catch (Exception ex) { return null; }
+    }
+
     private static HttpURLConnection connect(String path, String cookie) throws Exception {
         URL url = new URL(SITE + path);
         if (!"https".equals(url.getProtocol()) || !"mebuki.moe".equals(url.getHost()))

@@ -33,7 +33,7 @@ final class BridgeServer {
         animanch = new AnimanchAdapter(context);
         mebuki = new MebukiAdapter(context);
         extension = new ExtensionApi(context, aimoge, animanch, mebuki);
-        stockReply = new StockReply(aimoge,animanch,extension);
+        stockReply = new StockReply(aimoge,animanch,extension,draft->MebukiNewThreadActivity.open(context,draft));
     }
 
     void run() {

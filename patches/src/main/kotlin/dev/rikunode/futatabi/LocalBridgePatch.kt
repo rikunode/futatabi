@@ -104,6 +104,18 @@ private val bridgeManifestPatch = resourcePatch {
                 login.setAttribute("android:label", "Mebuki login")
                 application.appendChild(login)
             }
+            val newThread = "dev.rikunode.futatabi.bridge.MebukiNewThreadActivity"
+            if ((0 until matching.length).none {
+                    (matching.item(it) as? Element)?.getAttribute("android:name") == newThread
+                }
+            ) {
+                val activity = document.createElement("activity")
+                activity.setAttribute("android:name", newThread)
+                activity.setAttribute("android:exported", "false")
+                activity.setAttribute("android:label", "Mebuki")
+                activity.setAttribute("android:configChanges", "orientation|screenSize|keyboardHidden")
+                application.appendChild(activity)
+            }
         }
     }
 }
@@ -111,7 +123,7 @@ private val bridgeManifestPatch = resourcePatch {
 @Suppress("unused")
 val bridgePatch = bytecodePatch(
     name = "Local board bridge",
-    description = "Auto-register boards and run the local bridge with protected stock thread reading and reply submission (ARM64).",
+    description = "Auto-register boards and run the local bridge with protected stock reading, replies and new threads (ARM64).",
     default = true,
 ) {
     compatibleWith(

@@ -211,6 +211,17 @@ final class AnimanchAdapter {
         return virtualPostId(id,number);
     }
 
+    String confirmedNewThread(JSONObject accepted) throws Exception {
+        String thread=accepted.getString("thread"), number=accepted.getString("number");
+        if(!thread.matches("[1-9][0-9]{0,15}")||!"1".equals(number)||!accepted.optBoolean("attachmentUploaded"))return null;
+        String url=HOST+"/board/"+thread+"/";
+        String html=new String(fetch(url,0,1_700_000),StandardCharsets.UTF_8);
+        Matcher posts=RES.matcher(html);
+        if(!posts.find()||!number.equals(posts.group(1))||!IMAGE.matcher(posts.group(2)).find())return null;
+        synchronized(cache){cache.remove(HOST+"/");}
+        return remember("board.",thread);
+    }
+
     private static String virtualPostId(String thread, String number) {
         return thread.substring(0, 7) + String.format(Locale.ROOT, "%06d", Integer.parseInt(number) % 1_000_000);
     }

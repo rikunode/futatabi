@@ -10,7 +10,10 @@ final class StockReply {
     private final AimogeAdapter aimoge;
     private final AnimanchAdapter animanch;
     private final ExtensionApi api;
-    StockReply(AimogeAdapter a,AnimanchAdapter b,ExtensionApi e){aimoge=a;animanch=b;api=e;}
+    interface MebukiHandoff { String open(MebukiNewThreadDraft draft); }
+    private final MebukiHandoff handoff;
+    StockReply(AimogeAdapter a,AnimanchAdapter b,ExtensionApi e){this(a,b,e,draft->"めぶきの確認画面を開けません。未送信です。");}
+    StockReply(AimogeAdapter a,AnimanchAdapter b,ExtensionApi e,MebukiHandoff h){aimoge=a;animanch=b;api=e;handoff=h;}
     static boolean isPath(String path){
         return "/aimoge/futaba.php?guid=on".equals(path)||"/animanch/futaba.php?guid=on".equals(path)
                 ||"/mebuki/futaba.php?guid=on".equals(path);
@@ -26,15 +29,18 @@ final class StockReply {
             StockReplyRequest request=StockReplyRequest.parse(headers.get("content-type"),body);
             String board=path.startsWith("/aimoge/")?"aimoge":path.startsWith("/mebuki/")?"mebuki":"animanch";
             String id=request.get("resto");
-            if("mebuki".equals(board)&&!id.matches("[1-9][0-9]{12}"))
-                return error("\u3081\u3076\u304d\u306e\u30b9\u30ec\u7acb\u3066\u306f\u672a\u5bfe\u5fdc\u3067\u3059\u3002\u516c\u5f0f\u30b5\u30a4\u30c8\u3092\u4f7f\u3063\u3066\u304f\u3060\u3055\u3044\u3002");
-            if(!id.matches("[0-9]{13}"))return error("\u30b9\u30ec\u7acb\u3066\u306f\u62e1\u5f35\u30db\u30fc\u30e0\u3092\u4f7f\u3063\u3066\u304f\u3060\u3055\u3044\u3002");
+            boolean creating=id.isEmpty()||"0".equals(id);
+            if(creating&&"mebuki".equals(board)) {
+                try { return error(handoff.open(new MebukiNewThreadDraft(request))); }
+                catch(IllegalArgumentException ex){return error(ex.getMessage());}
+            }
+            if(!creating&&!id.matches("[1-9][0-9]{12}"))return error("\u8fd4\u4fe1\u5148\u304c\u4e0d\u6b63\u3067\u3059\u3002");
             if("mebuki".equals(board))return submitMebuki(request,id);
             boolean a="aimoge".equals(board);
-            String source=a?aimoge.stockThreadUuid(id):animanch.stockThreadId(id);
+            String source=creating?"":a?aimoge.stockThreadUuid(id):animanch.stockThreadId(id);
             if(source==null)return error("\u8fd4\u4fe1\u5148\u3092\u7279\u5b9a\u3067\u304d\u307e\u305b\u3093\u3002");
             JSONObject payload;
-            try{payload=request.payload(board,a?source:id);}
+            try{payload=request.payload(board,creating?"":a?source:id);}
             catch(IllegalArgumentException ex){return error(ex.getMessage());}
             BridgeServer.BridgeResponse upstream=a?api.submit(payload):animanch.post(payload);
             if(upstream.status!=201){
@@ -48,7 +54,8 @@ final class StockReply {
             String number;
             try{
                 JSONObject result=new JSONObject(new String(upstream.bytes,StandardCharsets.UTF_8));
-                number=a?aimoge.confirmedNumber(source,result):animanch.confirmedNumber(id,result);
+                number=creating?(a?aimoge.confirmedNewThread(result):animanch.confirmedNewThread(result)):
+                        (a?aimoge.confirmedNumber(source,result):animanch.confirmedNumber(id,result));
             }catch(Exception ex){number=null;}
             if(number==null)return error("\u53d7\u7406\u6e08\u307f\u3067\u3059\u304c\u6295\u7a3f\u756a\u53f7\u306e\u78ba\u8a8d\u306b\u5931\u6557\u3002\u518d\u6295\u7a3f\u305b\u305a\u66f4\u65b0\u3057\u3066\u304f\u3060\u3055\u3044\u3002");
             return new BridgeServer.BridgeResponse(200,"application/json; charset=Shift_JIS",

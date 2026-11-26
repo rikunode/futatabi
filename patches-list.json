@@ -1,6 +1,6 @@
 {
   "NOTE": "Do NOT manually edit this file. This file is automatically updated when semantic release (release.yml) runs. Manually editing this file can break your releases and break third party tools that use this file.",
-  "version": "0.4.0-beta.25",
+  "version": "0.4.0-beta.26",
   "patches": [
     {
       "name": "Block banner ads",
@@ -144,7 +144,7 @@
     },
     {
       "name": "Local board bridge",
-      "description": "Auto-register boards and run the local bridge with protected stock thread reading and reply submission (ARM64).",
+      "description": "Auto-register boards and run the local bridge with protected stock reading, replies and new threads (ARM64).",
       "default": true,
       "category": null,
       "compatiblePackages": [
@@ -200,7 +200,7 @@
     },
     {
       "name": "futatabi branding",
-      "description": "Rename the app to futatabi and use its blue-to-teal launcher icon on black. Optional.",
+      "description": "Use the futatabi launcher name and icon, and rename the home title to ふたたび. Optional.",
       "default": true,
       "category": null,
       "compatiblePackages": [

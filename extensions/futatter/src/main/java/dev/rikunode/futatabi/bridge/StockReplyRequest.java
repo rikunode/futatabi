@@ -94,13 +94,24 @@ final class StockReplyRequest {
     String get(String key){return fields.getOrDefault(key,"");}
     JSONObject payload(String board,String thread)throws Exception{
         String email=get("email").trim();
-        if(!get("sub").isEmpty())throw new IllegalArgumentException("\u30ec\u30b9\u306e\u984c\u540d\u306f\u672a\u5bfe\u5fdc");
+        boolean creating=thread.isEmpty();
+        if(!creating&&!get("sub").isEmpty())throw new IllegalArgumentException("\u30ec\u30b9\u306e\u984c\u540d\u306f\u672a\u5bfe\u5fdc");
         if("aimoge".equals(board)){
             if(!get("name").isEmpty())throw new IllegalArgumentException("\u3042\u3044\u3082\u3052\u306e\u540d\u524d\u6b04\u306f\u672a\u5bfe\u5fdc");
             if(!email.isEmpty()&&!"sage".equalsIgnoreCase(email)&&!"age".equalsIgnoreCase(email))
                 throw new IllegalArgumentException("\u30e1\u30fc\u30eb\u6b04\u306f sage / age \u306e\u307f");
         }else if(!email.isEmpty())throw new IllegalArgumentException("\u3042\u306b\u307e\u3093\u306e\u30e1\u30fc\u30eb\u6b04\u306f\u672a\u5bfe\u5fdc");
-        JSONObject p=new JSONObject().put("threadId",thread).put("body",get("com"));
+        String body=get("com");
+        if(creating&&"aimoge".equals(board)){
+            if("age".equalsIgnoreCase(email))throw new IllegalArgumentException("New Aimoge threads support sage, not age");
+            if(!get("sub").isEmpty())body=get("sub")+"\n"+body;
+        }
+        JSONObject p=new JSONObject().put("threadId",thread).put("body",body);
+        if(creating&&"animanch".equals(board)){
+            // General-purpose official category (通常スレ / その他話題).
+            // The official preCheck remains authoritative for acceptance.
+            p.put("title",get("sub")).put("category","7");
+        }
         if("aimoge".equals(board)){
             p.put("deleteKey",get("pwd"));
             if("sage".equalsIgnoreCase(email))p.put("sage",true);

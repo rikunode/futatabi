@@ -221,7 +221,7 @@ final class ExtensionApi {
         if(!threadId.isEmpty()){
             if(payload.optBoolean("sage"))send.put("sage",true);
             else if(payload.optBoolean("age"))send.put("age",true);
-        }
+        } else if(payload.optBoolean("sage")) send.put("sage",true);
         JSONArray attachments = payload.optJSONArray("attachments");
         if (attachments != null && attachments.length() > (threadId.isEmpty() ? 1 : 3))
             return BridgeServer.BridgeResponse.text(400, "Too many attachments");

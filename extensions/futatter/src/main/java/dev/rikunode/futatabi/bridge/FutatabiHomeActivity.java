@@ -264,7 +264,7 @@ public class FutatabiHomeActivity extends Activity {
 
     private void threadPicker(String board) {
         startPage(("animanch".equals(board) ? "あにまん" :
-                "mebuki".equals(board) ? "めぶきちゃんねる（おためし／遅延）" : "あいもげ") + " • 返信するスレを選ぶ");
+                "mebuki".equals(board) ? "めぶきちゃんねる" : "あいもげ") + " • 返信するスレを選ぶ");
         action("戻る", this::home);
         remote("スレ一覧を取得", "GET", "/ext/threads?board=" + board, null, result -> {
             if (result.status != 200) { updateNotice("取得失敗 HTTP " + result.status); return; }

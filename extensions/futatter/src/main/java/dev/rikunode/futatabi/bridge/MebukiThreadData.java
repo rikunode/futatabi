@@ -171,11 +171,15 @@ final class MebukiThreadData {
 
     /** Confirm the new OP, never infer success from a navigation alone. */
     boolean matchesNewThread(String body,long startedAt) {
-        if (posts.isEmpty()) return false;
+        return matchesNewOwnThread(startedAt) &&
+                posts.get(0).body.replace("\r\n","\n").replace('\r','\n').equals(body);
+    }
+    // The official form permits editing the body. Do not claim exact body matching.
+    boolean matchesNewOwnThread(long startedAt) {
+        if(posts.isEmpty())return false;
         NativePost op=posts.get(0);
         return op.author && !op.deleted && op.hasAttachment && op.replyTo.isEmpty() &&
-                MebukiTurboStream.dateMillis(op.date) >= startedAt &&
-                op.body.replace("\r\n","\n").replace('\r','\n').equals(body);
+                MebukiTurboStream.dateMillis(op.date)>=startedAt;
     }
 
     /** Futaba compatibility structure used by the stock thread parser. */

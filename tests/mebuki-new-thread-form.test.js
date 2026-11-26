@@ -20,13 +20,15 @@ class Textarea extends Input {
 const section = {dispatchEvent(e){dropped=e;return true}};
 const title = new Input(), body = new Textarea();
 const location = {origin:'https://mebuki.moe', pathname:'/app/new', search:''};
-const window = {};
+const stored = new Map(), dispatched = [];
+const window = {dispatchEvent:e=>dispatched.push(e)};
+const localStorage = {setItem:(key,value)=>stored.set(key,value)};
 class File {
   constructor(parts,name,options){this.bytes=Buffer.concat(parts.map(x=>Buffer.from(x)));this.name=name;this.type=options.type}
 }
 class DataTransfer {constructor(){this.items={add:f=>files.push(f)}}}
 class Event {constructor(type,options){this.type=type;Object.assign(this,options)}}
-const ctx = vm.createContext({location,window,HTMLInputElement:Input,HTMLTextAreaElement:Textarea,DataTransfer,File,Event,DragEvent:Event,atob,
+const ctx = vm.createContext({location,window,localStorage,CustomEvent:Event,HTMLInputElement:Input,HTMLTextAreaElement:Textarea,DataTransfer,File,Event,DragEvent:Event,atob,
   document:{querySelector(q){return {'input[name=name]':title,'textarea[name=content]':body,'input[name=attachments]':{}}[q]||null}}});
 const run = name => vm.runInContext(scripts[name],ctx);
 location.origin='https://example.invalid';
@@ -40,7 +42,9 @@ assert.equal(run('begin'),false);
 location.search='';
 assert.equal(run('ready'),true);
 assert.equal(run('begin'),true);
-assert.equal(title.value,'title');assert.equal(body.value,'fixture');
+assert.equal(title.value,'fixture');assert.equal(body.value,'title');
+assert.equal(run('banner'),true);assert.equal(stored.get('pwa-install-dismissed'),'true');assert.equal(dispatched[0].type,'local-storage-change');assert.equal(dispatched[0].detail.value,true);
+location.origin='https://example.invalid';assert.equal(run('banner'),false);assert.equal(dispatched.length,1);location.origin='https://mebuki.moe';
 assert.deepEqual(events,['input','change','input','change']);
 assert.equal(run('chunk'),true);
 assert.equal(run('finish'),true);

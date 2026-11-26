@@ -97,6 +97,8 @@ public final class MebukiNewThreadActivity extends Activity {
         close.setOnClickListener(v->finish());
         root.addView(close);
         browser = new WebView(this);
+        // Reveal only after the official dismissal preference and draft are applied.
+        browser.setVisibility(android.view.View.INVISIBLE);
         WebSettings settings=browser.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
@@ -121,7 +123,11 @@ public final class MebukiNewThreadActivity extends Activity {
             @Override public void onPageStarted(WebView v,String url,android.graphics.Bitmap icon) {
                 if (!allowed(url)) { v.stopLoading(); fail("公式のスレ立て画面を確認できません。"); }
             }
+            @Override public void onPageCommitVisible(WebView v,String url) {
+                v.evaluateJavascript(MebukiPwaBanner.SCRIPT,null);
+            }
             @Override public void onPageFinished(WebView v,String url) {
+                v.evaluateJavascript(MebukiPwaBanner.SCRIPT,null);
                 if (MebukiNewThreadDraft.URL.equals(url) && !preparing && !transferred && !failed) {
                     preparing=true;
                     awaitForm(0);
@@ -165,6 +171,7 @@ public final class MebukiNewThreadActivity extends Activity {
     private void fail(String message) {
         if (browser==null || isFinishing() || isDestroyed()) return;
         failed=true;
+        browser.setVisibility(android.view.View.VISIBLE);
         status.setText(message+" 元画面からむやみに再送しないでください。");
     }
 
@@ -200,7 +207,7 @@ public final class MebukiNewThreadActivity extends Activity {
     }
     private void prefill() {
         if(!onForm())return;
-        status.setText("題名・本文・画像を公式フォームへ引き継ぎ中…");
+        status.setText("スレタイ・画像を公式フォームへ引き継ぎ中…");
         browser.evaluateJavascript(claimed.draft.beginScript(claimed.id),r->{
             if(!onForm())return;
             if(!"true".equals(r)){fail("下書きの引き継ぎに失敗しました。未送信です。");return;}
@@ -214,8 +221,12 @@ public final class MebukiNewThreadActivity extends Activity {
             browser.evaluateJavascript(claimed.draft.finishScript(claimed.id),r->{
                 if(!onForm())return;
                 if(!"true".equals(r)){fail("画像の引き継ぎに失敗しました。未送信です。");return;}
-                transferred=true;
-                status.setText("題名・本文・画像を確認し、タグとスレ落ちを選択してください。本人確認後、公式の作成ボタンで送信します。");
+                browser.evaluateJavascript(MebukiPwaBanner.SCRIPT,ignored->{
+                    if(!onForm())return;
+                    transferred=true;
+                    browser.setVisibility(android.view.View.VISIBLE);
+                    status.setText("スレタイと画像を確認し、公式フォームの本文を入力してください。タグ・スレ落ち・本人確認後、公式の作成ボタンで送信します。");
+                });
             });
             return;
         }
@@ -234,18 +245,17 @@ public final class MebukiNewThreadActivity extends Activity {
         checkingThread=true;
         final String cookie=CookieManager.getInstance().getCookie(SITE);
         final String saved=MebukiSession.saved(this);
-        final String body=claimed.draft.body;
         status.setText("公式スレ画面へ移動しました。投稿結果を確認中…");
         new Thread(()->{
             boolean confirmed=false;
             try {
                 if (MebukiSession.sameAccount(saved,cookie))
-                    confirmed=MebukiSession.readThread(slug,cookie).matchesNewThread(body,startedAt);
+                    confirmed=MebukiSession.readThread(slug,cookie).matchesNewOwnThread(startedAt);
             }catch(Exception ignored){}
             final boolean matched=confirmed;
             runOnUiThread(()->{
                 if(!alive())return;
-                status.setText(matched?"作成したスレの本文と投稿者を確認しました。元画面で再送しないでください。":
+                status.setText(matched?"新しいスレの投稿者・作成時刻・画像添付を確認しました。元画面で再送しないでください。":
                         "公式スレ画面で結果を確認してください。アプリでの照合は未確定です。再送にご注意ください。");
             });
         },"futatabi-mebuki-new-confirm").start();

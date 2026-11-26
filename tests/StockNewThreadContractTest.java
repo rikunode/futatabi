@@ -171,7 +171,7 @@ public final class StockNewThreadContractTest {
         check(!result(stock,"mebuki",form(null,"title","",false)).contains("\"status\":\"ok\"")&&handoffs==0,"Mebuki missing image");
         check(!result(stock,"mebuki",form(null,"title","sage",true)).contains("\"status\":\"ok\"")&&handoffs==0,"Mebuki unsupported mail");
         check(!result(stock,"mebuki",form(null,"title","",true)).contains("\"status\":\"ok\"")&&handoffs==1,"Mebuki handoff is pending, not success");
-        check("title".equals(captured.title)&&"fixture".equals(captured.body)&&"image/jpeg".equals(captured.mime)&&Arrays.equals(captured.image,new byte[]{97,98,99}),"Mebuki draft title/body/image");
+        check("fixture".equals(captured.title)&&"title".equals(captured.body)&&"image/jpeg".equals(captured.mime)&&Arrays.equals(captured.image,new byte[]{97,98,99}),"Mebuki draft title/body/image");
         check(sessionReads==0,"draft handoff made no outbound request");
         check(MebukiSession.sameAccount("fixture-old","fixture-renewed"),"renewed same account");
         check(!MebukiSession.sameAccount("fixture-old","fixture-other"),"different account");
@@ -181,6 +181,8 @@ public final class StockNewThreadContractTest {
         String op="fixture <script>no execution</script>";
         long timestamp=java.time.Instant.parse("2026-11-25T15:00:00Z").toEpochMilli();
         check(MebukiThreadData.convert(own).matchesNewThread(op,timestamp),"authored new OP readback");
+        check(MebukiThreadData.convert(own).matchesNewOwnThread(timestamp),"new own OP with editable official body");
+        check(!MebukiThreadData.convert(fixture).matchesNewOwnThread(timestamp),"not own new OP");
         check(!MebukiThreadData.convert(fixture).matchesNewThread(op,timestamp),"not own OP");
         check(!MebukiThreadData.convert(own).matchesNewThread("different",timestamp),"body mismatch");
         check(!MebukiThreadData.convert(own).matchesNewThread(op,timestamp+1),"old thread");
@@ -188,7 +190,7 @@ public final class StockNewThreadContractTest {
         if(args.length==1)java.nio.file.Files.writeString(java.nio.file.Path.of(args[0]),new JSONObject()
                 .put("ready",MebukiNewThreadDraft.readyScript()).put("begin",captured.beginScript("fixture-draft"))
                 .put("chunk",MebukiNewThreadDraft.chunkScript("fixture-draft","YWJj"))
-                .put("finish",captured.finishScript("fixture-draft")).toString());
+                .put("finish",captured.finishScript("fixture-draft")).put("banner",MebukiPwaBanner.SCRIPT).toString());
         check(!result(stock,"aimoge",form("invalid","title","sage",true)).contains("\"status\":\"ok\"")&&aim==2,"invalid reply ID does not create");
         System.out.println("PASS stock new thread: Aimoge credential, fields, image, OP readback; Animanch 32 picker options, default, no send until selection, cancel/double-tap guard, invalid rejection, unchanged replies, precheck, image, readback, partial failure; Mebuki draft handoff without posting; malformed reply rejected. No live network.");
     }

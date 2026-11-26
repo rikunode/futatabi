@@ -10,13 +10,16 @@ final class MebukiNewThreadDraft {
     final byte[] image;
 
     MebukiNewThreadDraft(StockReplyRequest request) {
-        title = request.get("sub").trim();
-        body = request.get("com").replace("\r\n","\n").replace('\r','\n');
+        // Stock main text is the requested thread title. Preserve any optional
+        // stock subject as an editable initial body; normally the official body starts empty.
+        title = request.get("com").trim();
+        body = request.get("sub").replace("\r\n","\n").replace('\r','\n');
         if (!request.get("name").isEmpty() || !request.get("email").isEmpty())
             throw new IllegalArgumentException("めぶきの名前・メール欄は空欄にしてください。");
-        if (title.codePointCount(0,title.length()) > 100 || body.trim().isEmpty() ||
+        if (title.isEmpty() || title.indexOf('\n')>=0 || title.indexOf('\r')>=0 ||
+                title.codePointCount(0,title.length()) > 100 ||
                 body.codePointCount(0,body.length()) > 5000 || body.split("\n",-1).length > 100)
-            throw new IllegalArgumentException("めぶきの題名・本文の長さを確認してください。");
+            throw new IllegalArgumentException("めぶきでは純正の本文欄にスレタイ（1行・100文字以内）を入力してください。");
         if (request.image == null || request.image.length == 0 || request.image.length > 8_000_000)
             throw new IllegalArgumentException("めぶきのスレ画は1枚（8MB以下）必要です。");
         if (request.mime == null || !request.mime.matches("image/(jpeg|png|gif|webp)"))

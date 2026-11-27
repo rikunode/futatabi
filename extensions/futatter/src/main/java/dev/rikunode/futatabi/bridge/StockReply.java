@@ -11,11 +11,11 @@ final class StockReply {
     private final AnimanchAdapter animanch;
     private final ExtensionApi api;
     interface MebukiHandoff { String open(MebukiNewThreadDraft draft); }
-    interface AnimanchHandoff { String open(AnimanchNewThreadDraft draft); }
+    interface AnimanchHandoff { BridgeServer.BridgeResponse open(AnimanchNewThreadDraft draft); }
     private final MebukiHandoff handoff;
     private final AnimanchHandoff categoryPicker;
     StockReply(AimogeAdapter a,AnimanchAdapter b,ExtensionApi e){this(a,b,e,draft->"めぶきの確認画面を開けません。未送信です。");}
-    StockReply(AimogeAdapter a,AnimanchAdapter b,ExtensionApi e,MebukiHandoff h){this(a,b,e,h,draft->"カテゴリ選択画面を開けません。未送信です。");}
+    StockReply(AimogeAdapter a,AnimanchAdapter b,ExtensionApi e,MebukiHandoff h){this(a,b,e,h,draft->error("カテゴリ選択画面を開けません。未送信です。"));}
     StockReply(AimogeAdapter a,AnimanchAdapter b,ExtensionApi e,MebukiHandoff h,AnimanchHandoff picker){aimoge=a;animanch=b;api=e;handoff=h;categoryPicker=picker;}
     static boolean isPath(String path){
         return "/aimoge/futaba.php?guid=on".equals(path)||"/animanch/futaba.php?guid=on".equals(path)
@@ -46,8 +46,8 @@ final class StockReply {
             try{payload=request.payload(board,creating?"":a?source:id);}
             catch(IllegalArgumentException ex){return error(ex.getMessage());}
             if(creating&&!a) {
-                try { return error(categoryPicker.open(new AnimanchNewThreadDraft(payload,
-                        selected->send(false,true,"","",selected)))); }
+                try { return categoryPicker.open(new AnimanchNewThreadDraft(payload,
+                        selected->send(false,true,"","",selected))); }
                 catch(IllegalArgumentException ex){return error(ex.getMessage());}
             }
             return send(a,creating,source,id,payload);
@@ -62,6 +62,7 @@ final class StockReply {
                 if(upstream.status==409 && !a){
                     try{
                         JSONObject partial=new JSONObject(new String(upstream.bytes,StandardCharsets.UTF_8));
+                        if(creating&&partial.optBoolean("newThreadError"))return error(partial.getString("error"));
                         if(partial.optBoolean("postAccepted")){
                             int status=partial.optInt("uploadHttpStatus",0);
                             String detail=status>0?"（HTTP "+status+"）":"（HTTPステータス未取得）";

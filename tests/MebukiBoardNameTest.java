@@ -120,6 +120,48 @@ public final class MebukiBoardNameTest {
         check(BridgePalette.decorate("<head></head><body></body>",BridgePalette.get(restored)).contains("#fafafa"),"light HTML");
         check(BridgePalette.decorate("<head></head><body></body>",BridgePalette.DARK).contains("#202124"),"dark HTML");
         check(!BridgePalette.save(restored,"invalid")&&BridgePalette.LIGHT.equals(BridgePalette.get(restored)),"invalid palette rejected");
+        // Model whole-file replacement by the original restore, with the
+        // extension's separate migration file intact.
+        FutatabiProvider.registerBoards(restored);
+        String mayRecord=new JSONObject(defaults.getString(0)).put("name","custom may").put("favorite",true).put("resuCount",41).toString();
+        String imgRecord=new JSONObject(defaults.getString(1)).put("name","custom img").put("sureOpenCount",12).toString();
+        JSONArray stockOnly=new JSONArray().put(imgRecord).put(custom1).put(mayRecord);
+        String stockRaw=PREFIX+stockOnly.toString();
+        prefs.edit().clear().putString("flutter.itaList",stockRaw).putLong("flutter.themeMode",2L).putString("flutter.unrelated","keep").commit();
+        FutatabiProvider.registerBoards(restored);
+        check(BridgePalette.repair(restored),"missing palette recovery");
+        String fixed=prefs.getString("flutter.itaList","");
+        JSONArray fixedList=list(fixed);
+        check(fixedList.length()==7,"restore stock-only adds Jun and three external boards");
+        check(mayRecord.equals(fixedList.getString(0))&&custom1.equals(fixedList.getString(1))&&imgRecord.equals(fixedList.getString(2)),"restored board records preserved");
+        check(jun.equals(new JSONObject(fixedList.getString(3)).getString("url")),"restored Jun order");
+        for(int i=3;i<expected.length;i++)
+            check(expected[i].equals(new JSONObject(fixedList.getString(i+1)).getString("url")),"restored external order");
+        check(prefs.getLong("flutter.themeMode",-1)==2L&&"keep".equals(prefs.getString("flutter.unrelated","")),"other settings unchanged");
+        check(BridgePalette.LIGHT.equals(prefs.getString(BridgePalette.KEY,"")),"pre-restore palette recovered");
+        FutatabiProvider.registerBoards(restored);
+        check(fixed.equals(prefs.getString("flutter.itaList","")),"manual/cold start idempotent");
+        // Legacy representation: feed the decoded list produced by stock
+        // getAll, exactly as the new DEX hook will do.
+        java.util.Map<String,Object> loaded=new java.util.HashMap<>();
+        java.util.List<String> legacy=new java.util.ArrayList<>();
+        for(int i=0;i<stockOnly.length();i++)legacy.add(stockOnly.getString(i));
+        prefs.edit().putString("flutter.itaList",PREFIX.substring(0,PREFIX.length()-1)+"legacy-fixture").commit();
+        loaded.put("flutter.itaList",legacy);
+        loaded.put("flutter.unrelated","keep");
+        FutatabiProvider.repairDecodedPreferences(prefs,loaded);
+        check(fixed.equals(loaded.get("flutter.itaList"))&&fixed.equals(prefs.getString("flutter.itaList","")),"legacy decoded list persisted before Dart");
+        FutatabiProvider.repairDecodedPreferences(prefs,loaded);
+        check(fixed.equals(loaded.get("flutter.itaList")),"legacy idempotent");
+        check("keep".equals(loaded.get("flutter.unrelated")),"unrelated loaded map untouched");
+        loaded.put("flutter.itaList",java.util.Arrays.asList(123));
+        FutatabiProvider.repairDecodedPreferences(prefs,loaded);
+        check(fixed.equals(prefs.getString("flutter.itaList","")),"malformed legacy data not overwritten");
+        prefs.edit().putString(BridgePalette.KEY,BridgePalette.DARK).commit();
+        check(BridgePalette.repair(restored)&&BridgePalette.DARK.equals(BridgePalette.get(restored)),"explicit restored palette wins");
+        prefs.edit().remove(BridgePalette.KEY).commit();
+        check(BridgePalette.repair(restored)&&BridgePalette.DARK.equals(prefs.getString(BridgePalette.KEY,"")),"mirror follows restored choice");
+        System.out.println("PASS stock restore, legacy decoded restore, exact records, unrelated settings, idempotence, palette mirror precedence");
         System.out.println("PASS existing migration: same count, fields, other boards and order; fresh restore, palette in stock preference file, dark/light");
     }
 }

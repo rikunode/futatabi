@@ -1,6 +1,10 @@
 package dev.rikunode.futatabi
 
+import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLabels
+import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.formats.Instruction35c
+import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 import app.morphe.patcher.patch.PatchException
 import app.morphe.patcher.util.smali.ExternalLabel
 import com.android.tools.smali.dexlib2.Opcode
@@ -142,6 +146,36 @@ val bridgePatch = bytecodePatch(
     dependsOn(bridgeManifestPatch, threadReplyResources)
     extendWith("extensions/futatter.mpe")
     execute {
+        // Repair legacy board lists after the stock decoder, before Dart
+        // caches them. Do not add another Java deserializer.
+        val prefsClass = mutableClassDefByOrNull("Lg6/a;")
+            ?: throw PatchException("futatabi: shared preferences plugin missing")
+        if (prefsClass.fields.none { it.name == "a" && it.type == "Landroid/content/SharedPreferences;" })
+            throw PatchException("futatabi: shared preferences field mismatch")
+        val getAll = prefsClass.methods.singleOrNull {
+            it.name == "b" && it.parameterTypes.map { p -> p.toString() } ==
+                listOf("Ljava/lang/String;", "Ljava/util/List;") && it.returnType == "Ljava/util/Map;"
+        } ?: throw PatchException("futatabi: shared preferences getAll missing")
+        val getAllImpl = getAll.implementation ?: throw PatchException("futatabi: getAll has no code")
+        val getAllCode = getAllImpl.instructions.toList()
+        val ret = getAllCode.lastIndex
+        val call = getAllCode.getOrNull(ret - 2) as? Instruction35c
+        val ref = call?.reference as? MethodReference
+        if (getAllImpl.registerCount != 4 || call?.opcode != Opcode.INVOKE_VIRTUAL ||
+            call.registerCount != 3 || call.registerC != 1 || call.registerD != 2 || call.registerE != 3 ||
+            ref?.definingClass != "Lg6/a;" || ref.name != "j" ||
+            ref.parameterTypes.map { it.toString() } != listOf("Ljava/lang/String;", "Ljava/util/Set;") ||
+            ref.returnType != "Ljava/util/Map;" ||
+            getAllCode[ret - 1].opcode != Opcode.MOVE_RESULT_OBJECT ||
+            (getAllCode[ret - 1] as? OneRegisterInstruction)?.registerA != 2 ||
+            getAllCode[ret].opcode != Opcode.RETURN_OBJECT ||
+            (getAllCode[ret] as? OneRegisterInstruction)?.registerA != 2)
+            throw PatchException("futatabi: shared preferences getAll instruction mismatch")
+        getAll.addInstructions(ret, """
+            iget-object v0, v1, Lg6/a;->a:Landroid/content/SharedPreferences;
+            invoke-static {v0, v2}, Ldev/rikunode/futatabi/bridge/FutatabiProvider;->repairDecodedPreferences(Landroid/content/SharedPreferences;Ljava/util/Map;)V
+        """)
+
         // Only the reserved relative asset-path signal is consumed; normal URLs
         // keep the original URL-launcher implementation.
         val clazz = mutableClassDefByOrNull("Lh6/i;")

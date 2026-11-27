@@ -29,6 +29,11 @@ public final class FutatabiProvider extends ContentProvider {
             Log.w(TAG, "Board registration skipped: " + ex.getClass().getSimpleName());
         }
         try {
+            BridgePalette.repair(context);
+        } catch (Exception ex) {
+            Log.w(TAG, "Palette recovery skipped: " + ex.getClass().getSimpleName());
+        }
+        try {
             final Context app = context.getApplicationContext();
             Thread server = new Thread(() -> {
                 try { new BridgeServer(app).run(); }
@@ -51,7 +56,7 @@ public final class FutatabiProvider extends ContentProvider {
     private static final String MAY = "https://may.2chan.net/b/";
     private static final String JUN = "https://jun.2chan.net/jun/";
 
-    private static void registerBoards(Context context) throws Exception {
+    static void registerBoards(Context context) throws Exception {
         SharedPreferences prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE);
         SharedPreferences migration = context.getSharedPreferences("futatabi_default_migration", Context.MODE_PRIVATE);
         String raw = prefs.getString("flutter.itaList", null);
@@ -70,6 +75,30 @@ public final class FutatabiProvider extends ContentProvider {
             if (!prefs.edit().putString("flutter.itaList", updated).commit()) return;
         }
         if (firstPass) migration.edit().putBoolean(DEFAULTS_MIGRATED, true).commit();
+    }
+
+    /**
+     * Stock getAll already decodes legacy Java-serialized lists and Sets.
+     * Repair that decoded value before Dart receives/caches it; never add
+     * another Java deserializer or change an unrelated preference.
+     */
+    public static void repairDecodedPreferences(SharedPreferences prefs, java.util.Map<String,Object> loaded) {
+        final String key = "flutter.itaList";
+        Object decoded = loaded.get(key);
+        if (!(decoded instanceof java.util.List)) return;
+        try {
+            JSONArray items = new JSONArray();
+            for (Object entry : (java.util.List<?>) decoded) {
+                if (!(entry instanceof String)) return;
+                items.put(entry);
+            }
+            String original = FLUTTER_PREFIX + items.toString();
+            String repaired = completeBoards(original, false);
+            if (!original.equals(repaired) && prefs.edit().putString(key, repaired).commit())
+                loaded.put(key, repaired);
+        } catch (Exception ex) {
+            Log.w(TAG, "Legacy board recovery skipped: " + ex.getClass().getSimpleName());
+        }
     }
 
     // Pure saved-list transformation; also used by the host regression test.
@@ -105,8 +134,8 @@ public final class FutatabiProvider extends ContentProvider {
             }
         }
         // The flag gates only the legacy replacement, not missing default boards.
-        change |= ensureBoard(items, "二次元裏（may)", MAY, true);
-        change |= ensureBoard(items, "二次元裏（img)", IMG, true);
+        change |= ensureBoard(items, "二次元裏（may)", MAY, firstPass);
+        change |= ensureBoard(items, "二次元裏（img)", IMG, firstPass);
         // The stock Futaba parser already recognizes /jun/; no bridge route.
         change |= ensureBoard(items, "二次元裏（jun)", JUN, false);
         change |= ensureBoard(items, "めぶきちゃんねる", MEBUKI, true);

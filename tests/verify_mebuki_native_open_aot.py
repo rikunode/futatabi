@@ -20,7 +20,7 @@ with zipfile.ZipFile(sys.argv[1]) as apk:
 
 assert code[0x7ac4d8:0x7ac4dc].hex() == "79e80b14"
 assert code[0x7ac5ec:0x7ac5f0].hex() == "6ce80b14"
-assert struct.unpack_from("<QQ", code, 0xd0) in ((0x6867ec, 0x6867ec), (0x6868ac, 0x6868ac))
+assert struct.unpack_from("<QQ", code, 0xd0) in ((0x6867ec, 0x6867ec), (0x6868ac, 0x6868ac), (0x6869e4, 0x6869e4))
 HEAP, FRAME, PP = 0x11000000, 0x12008000, 0x13000000
 URI, STRING = HEAP + 1, HEAP + 0x1001
 URL = "http://127.0.0.1:18765/mebuki/res/1234567890123.htm"

@@ -17,7 +17,7 @@ with zipfile.ZipFile(sys.argv[1]) as z:
     code = z.read("lib/arm64-v8a/libapp.so")
 assert code[0x8dc9cc:0x8dc9d8].hex() == "882707149227079495270714"
 assert code[0x9298bc:0x9298c0].hex() == "f5f30514"
-assert struct.unpack_from("<QQ",code,0xd0)==(0x6868ac,0x6868ac)
+assert struct.unpack_from("<QQ",code,0xd0)in ((0x6868ac,0x6868ac),(0x6869e4,0x6869e4))
 PALETTE = [0xfff44336,0xffe91e63,0xff9c27b0,0xff673ab7,0xff3f51b5,
            0xff2196f3,0xff03a9f4,0xff00bcd4,0xff009688,0xff4caf50,
            0xff8bc34a,0xffcddc39,0xffffeb3b,0xffffc107,0xffff9800,

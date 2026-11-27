@@ -206,16 +206,6 @@ public class FutatabiHomeActivity extends Activity {
                         }else updateNotice("配色を保存できませんでした");
                     }).setNegativeButton("キャンセル",null).show();
         });
-        // The stock restore replaces the preference XML directly. Do not
-        // edit a live Flutter/Android preference cache after that operation.
-        action("追加板を復活（再起動）", () -> new android.app.AlertDialog.Builder(this)
-                .setTitle("追加板を復活")
-                .setMessage("アプリを終了します。起動し直すと、不足している追加板を再登録します。純正の設定は保持します。")
-                .setNegativeButton("キャンセル", null)
-                .setPositiveButton("終了する", (dialog, which) -> {
-                    finishAffinity();
-                    android.os.Process.killProcess(android.os.Process.myPid());
-                }).show());
         if (CacheMaintenanceProvider.lastReport() != null) {
             action("キャッシュ診断（起動時）", () -> new android.app.AlertDialog.Builder(this)
                     .setTitle("キャッシュ診断（起動時）")

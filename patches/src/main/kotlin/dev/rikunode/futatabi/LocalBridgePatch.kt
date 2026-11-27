@@ -3,6 +3,8 @@ package dev.rikunode.futatabi
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLabels
 import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
+import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
+import com.android.tools.smali.dexlib2.iface.reference.StringReference
 import com.android.tools.smali.dexlib2.iface.instruction.formats.Instruction35c
 import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 import app.morphe.patcher.patch.PatchException
@@ -56,6 +58,11 @@ private val bridgeManifestPatch = resourcePatch {
                 activity.setAttribute("android:label", "futatabi")
                 application.appendChild(activity)
             }
+            val recovery = document.createElement("activity")
+            recovery.setAttribute("android:name", "dev.rikunode.futatabi.bridge.BoardRecoveryActivity")
+            recovery.setAttribute("android:exported", "false")
+            recovery.setAttribute("android:theme", "@android:style/Theme.Material.Dialog.NoActionBar")
+            application.appendChild(recovery)
             val replyName = "dev.rikunode.futatabi.bridge.ThreadReplyActivity"
             if ((0 until activities.length).none {
                     (activities.item(it) as? Element)?.getAttribute("android:name") == replyName
@@ -175,6 +182,49 @@ val bridgePatch = bytecodePatch(
             iget-object v0, v1, Lg6/a;->a:Landroid/content/SharedPreferences;
             invoke-static {v0, v2}, Ldev/rikunode/futatabi/bridge/FutatabiProvider;->repairDecodedPreferences(Landroid/content/SharedPreferences;Ljava/util/Map;)V
         """)
+
+        // Intercept the exact empty-OK marker after stock showToast dispatch.
+        val toastClass = mutableClassDefByOrNull("Ln6/e;")
+            ?: throw PatchException("futatabi: toast plugin missing")
+        if (toastClass.fields.none { it.name == "a" && it.type == "Landroid/content/Context;" })
+            throw PatchException("futatabi: toast context mismatch")
+        val toast = toastClass.methods.singleOrNull {
+            it.name == "onMethodCall" && it.parameterTypes.map { p -> p.toString() } ==
+                listOf("LR5/j;", "LR5/k\$d;") && it.returnType == "V"
+        } ?: throw PatchException("futatabi: toast handler missing")
+        val toastImpl = toast.implementation ?: throw PatchException("futatabi: toast code missing")
+        val toastCode = toastImpl.instructions.toList()
+        val msg = toastCode.indices.singleOrNull { n ->
+            toastCode[n].opcode == Opcode.CONST_STRING &&
+                (toastCode[n] as? OneRegisterInstruction)?.registerA == 3 &&
+                ((toastCode[n] as? ReferenceInstruction)?.reference as? StringReference)?.string == "msg"
+        } ?: throw PatchException("futatabi: toast message site missing")
+        val read = toastCode.getOrNull(msg + 1) as? Instruction35c
+        val value = toastCode.getOrNull(msg + 3) as? Instruction35c
+        val rr = read?.reference as? MethodReference
+        val vr = value?.reference as? MethodReference
+        if (toastImpl.registerCount != 19 || read?.opcode != Opcode.INVOKE_VIRTUAL ||
+            read.registerCount != 2 || read.registerC != 1 || read.registerD != 3 ||
+            rr?.definingClass != "LR5/j;" || rr.name != "a" ||
+            toastCode[msg + 2].opcode != Opcode.MOVE_RESULT_OBJECT ||
+            (toastCode[msg + 2] as? OneRegisterInstruction)?.registerA != 3 ||
+            value?.opcode != Opcode.INVOKE_STATIC || value.registerCount != 1 || value.registerC != 3 ||
+            vr?.definingClass != "Ljava/lang/String;" || vr.name != "valueOf" ||
+            toastCode[msg + 4].opcode != Opcode.MOVE_RESULT_OBJECT ||
+            (toastCode[msg + 4] as? OneRegisterInstruction)?.registerA != 3 ||
+            toastCode[msg + 5].opcode != Opcode.CONST_STRING ||
+            (toastCode[msg + 5] as? OneRegisterInstruction)?.registerA != 4 ||
+            ((toastCode[msg + 5] as? ReferenceInstruction)?.reference as? StringReference)?.string != "length")
+            throw PatchException("futatabi: toast message instructions mismatch")
+        toast.addInstructionsWithLabels(msg + 5, """
+            iget-object v4, v0, Ln6/e;->a:Landroid/content/Context;
+            invoke-static {v4, v3}, Ldev/rikunode/futatabi/bridge/BoardRecoveryActivity;->tryLaunch(Landroid/content/Context;Ljava/lang/String;)Z
+            move-result v4
+            if-eqz v4, :originalToast
+            sget-object v4, Ljava/lang/Boolean;->TRUE:Ljava/lang/Boolean;
+            invoke-interface {v2, v4}, LR5/k${'$'}d;->a(Ljava/lang/Object;)V
+            return-void
+        """, ExternalLabel("originalToast", toastCode[msg + 5]))
 
         // Only the reserved relative asset-path signal is consumed; normal URLs
         // keep the original URL-launcher implementation.

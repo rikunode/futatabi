@@ -101,6 +101,22 @@ public final class FutatabiProvider extends ContentProvider {
         }
     }
 
+    // Only the three external boards, for the manual confirmation dialog.
+    // Unknown storage is not interpreted as absence.
+    static boolean[] externalBoardStatus(String raw) throws Exception {
+        boolean[] found = new boolean[3];
+        if (raw == null) return found;
+        if (!raw.startsWith(FLUTTER_PREFIX)) return null;
+        JSONArray items = new JSONArray(raw.substring(FLUTTER_PREFIX.length()));
+        for (int i = 0; i < items.length(); i++) {
+            String url = new JSONObject(items.getString(i)).optString("url");
+            if (MEBUKI.equals(url)) found[0] = true;
+            if (AIMOGE.equals(url)) found[1] = true;
+            if (ANIMANCH.equals(url)) found[2] = true;
+        }
+        return found;
+    }
+
     // Pure saved-list transformation; also used by the host regression test.
     static String completeBoards(String raw, boolean firstPass) throws Exception {
         if (raw != null && !raw.startsWith(FLUTTER_PREFIX)) return raw;

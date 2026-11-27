@@ -161,6 +161,9 @@ public final class MebukiBoardNameTest {
         check(BridgePalette.repair(restored)&&BridgePalette.DARK.equals(BridgePalette.get(restored)),"explicit restored palette wins");
         prefs.edit().remove(BridgePalette.KEY).commit();
         check(BridgePalette.repair(restored)&&BridgePalette.DARK.equals(prefs.getString(BridgePalette.KEY,"")),"mirror follows restored choice");
+        check(java.util.Arrays.equals(FutatabiProvider.externalBoardStatus(stockRaw),new boolean[]{false,false,false}),"manual status missing");
+        check(java.util.Arrays.equals(FutatabiProvider.externalBoardStatus(fixed),new boolean[]{true,true,true}),"manual status registered");
+        check(FutatabiProvider.externalBoardStatus("legacy")==null,"unknown format not misreported");
         System.out.println("PASS stock restore, legacy decoded restore, exact records, unrelated settings, idempotence, palette mirror precedence");
         System.out.println("PASS existing migration: same count, fields, other boards and order; fresh restore, palette in stock preference file, dark/light");
     }

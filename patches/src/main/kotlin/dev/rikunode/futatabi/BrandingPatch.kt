@@ -104,8 +104,10 @@ private val brandingTitleResources = rawResourcePatch {
         val paletteAt = 0xaa67ec
         val elf = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
         val rxSize = elf.getLong(0xd0)
-        if (rxSize !in setOf(0x686160L, 0x6867ecL) || elf.getLong(0xd8) != rxSize ||
-            bytes.copyOfRange(0x420000 + rxSize.toInt(), paletteAt + paletteStub.size).any { it != 0.toByte() })
+        val recoveryEnd = 0x6869e4L
+        val paddingStart = if (rxSize == recoveryEnd) paletteAt else 0x420000 + rxSize.toInt()
+        if (rxSize !in setOf(0x686160L, recoveryEnd) || elf.getLong(0xd8) != rxSize ||
+            bytes.copyOfRange(paddingStart, paletteAt + paletteStub.size).any { it != 0.toByte() })
             throw PatchException("futatabi: unsupported palette executable padding")
         replaceChecked(0x8dc9cc, hex("210080d2e7080794e20300aa"), hex("882707149227079495270714"))
         // Translate just the removed ARGB value when restoring mainColor, not
@@ -119,8 +121,8 @@ private val brandingTitleResources = rawResourcePatch {
             hex("b1835ef83f4e00f1210600541f2003d51f2003d51f2003d51f2003d51f2003d51f2003d5"))
         paletteStub.copyInto(bytes, paletteAt)
         val paletteEnd = (paletteAt + paletteStub.size - 0x420000).toLong()
-        elf.putLong(0xd0, paletteEnd)
-        elf.putLong(0xd8, paletteEnd)
+        elf.putLong(0xd0, maxOf(rxSize, paletteEnd))
+        elf.putLong(0xd8, maxOf(rxSize, paletteEnd))
 
         val stamp = Files.getLastModifiedTime(lib.toPath())
         lib.writeBytes(bytes)

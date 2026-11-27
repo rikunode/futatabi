@@ -111,6 +111,12 @@ private val brandingTitleResources = rawResourcePatch {
         // Translate just the removed ARGB value when restoring mainColor, not
         // other colors or the preference format; stock constructor still runs.
         replaceChecked(0x9298bc, hex("f1378092"), hex("f5f30514"))
+        // The original swatch shows futaba.svg only when its Color equals
+        // the shared legacy #800000 sentinel. Keep the original SVG drawing,
+        // but use the one-based palette position already saved at fp-0x18.
+        replaceChecked(0x8dc9ec,
+            hex("60f05ff8007c4cd3703b4091109643f9f00d00a9fe0300aabe7a7ef8c0033fd660052037"),
+            hex("b1835ef83f4e00f1210600541f2003d51f2003d51f2003d51f2003d51f2003d51f2003d5"))
         paletteStub.copyInto(bytes, paletteAt)
         val paletteEnd = (paletteAt + paletteStub.size - 0x420000).toLong()
         elf.putLong(0xd0, paletteEnd)

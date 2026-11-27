@@ -99,6 +99,12 @@ for i in range(19):
         assert bytes(u.mem_read(NEW+7,36))==bytes(u.mem_read(STOCK+7,36))
         channels=struct.unpack("<dddd",u.mem_read(NEW+7,32))
         assert tuple(round(v*255) for v in channels)==(255,17,146,201)
+    # Execute the actual swatch child decision in the same mock frame.
+    # Neither the Color instance nor the saved setting is involved now.
+    u.emu_start(0x8dc9ec,0x8dca10 if i==18 else 0x8dcab8,count=30)
+    assert u.reg_read(UC_ARM64_REG_PC)==(0x8dca10 if i==18 else 0x8dcab8)
+    assert memq(u,FRAME-8)==(NEW if i==18 else ORIGINAL[i])
+print("PASS leaf SVG branch: only slot 19, no change to selected color")
 print("PASS palette 19 positions; original sentinel untouched; stock constructor byte match; reused allocation return PC")
 
 for argb in PALETTE+[BRAND,0,0xffffffff,0x1234567890]:

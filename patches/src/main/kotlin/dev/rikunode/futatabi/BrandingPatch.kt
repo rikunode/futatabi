@@ -94,6 +94,28 @@ private val brandingTitleResources = rawResourcePatch {
         replaceChecked(0x8f93a4,
             hex("48c0f597e30300aa60ff66f9a3031ef860b000b8a0035ff8603001b8"),
             hex("606f409100f045f9a0031ef81f2003d51f2003d51f2003d51f2003d5"))
+        // The nineteenth palette entry is the legacy Futaba sentinel #800000.
+        // Do not mutate that shared constant: other theme providers compare it.
+        // Reuse the existing Context allocation call/return PC, frame and stack map:
+        // only the final entry allocates a stock Color first, initializes its fields,
+        // then returns to the same Context allocation with the tracked color local.
+        // The existing selection callback and ARGB integer persistence are unchanged.
+        val paletteStub = hex("210080d2b1835ef83f4e00f1e1000054703b4091109643f9b1835ff83f0210eb41000054410080d26fd8f8173f0800f1410000543392e71752e1ff1710f05ff8107e4cd3b14182d21f0211eb81020054609760fd70d775f9107002b801106e1e017000fc310280522102631e2118601e01f000fc511280522102631e2118601e017001fc311980522102631e2118601e01f001fca0831ff852d8f817e20300aa53d8f81710f0bf525f0010eb610000542259925222e2bf72f1378092060cfa17")
+        val paletteAt = 0xaa67ec
+        val elf = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        val rxSize = elf.getLong(0xd0)
+        if (rxSize !in setOf(0x686160L, 0x6867ecL) || elf.getLong(0xd8) != rxSize ||
+            bytes.copyOfRange(0x420000 + rxSize.toInt(), paletteAt + paletteStub.size).any { it != 0.toByte() })
+            throw PatchException("futatabi: unsupported palette executable padding")
+        replaceChecked(0x8dc9cc, hex("210080d2e7080794e20300aa"), hex("882707149227079495270714"))
+        // Translate just the removed ARGB value when restoring mainColor, not
+        // other colors or the preference format; stock constructor still runs.
+        replaceChecked(0x9298bc, hex("f1378092"), hex("f5f30514"))
+        paletteStub.copyInto(bytes, paletteAt)
+        val paletteEnd = (paletteAt + paletteStub.size - 0x420000).toLong()
+        elf.putLong(0xd0, paletteEnd)
+        elf.putLong(0xd8, paletteEnd)
+
         val stamp = Files.getLastModifiedTime(lib.toPath())
         lib.writeBytes(bytes)
         if (Files.getLastModifiedTime(lib.toPath()) == stamp)

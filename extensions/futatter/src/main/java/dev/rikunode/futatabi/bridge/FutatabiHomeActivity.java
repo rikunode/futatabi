@@ -197,6 +197,15 @@ public class FutatabiHomeActivity extends Activity {
                 updateNotice("あいもげ：" + (loggedIn ? "ログイン中" : "未ログイン") + "\nめぶきちゃんねる：" + state.optString("mebukiSessionState", "UNVERIFIED"));
             } catch (Exception ex) { updateNotice("状態を確認できませんでした"); }
         });
+        action("追加板の配色："+(BridgePalette.LIGHT.equals(BridgePalette.get(this))?"ライト":"ダーク"),()->{
+            new android.app.AlertDialog.Builder(this).setTitle("追加板の配色")
+                    .setSingleChoiceItems(new String[]{"ダーク（既定）","ライト"},
+                            BridgePalette.LIGHT.equals(BridgePalette.get(this))?1:0,(dialog,which)->{
+                        if(BridgePalette.save(this,which==0?BridgePalette.DARK:BridgePalette.LIGHT)){
+                            dialog.dismiss();home();
+                        }else updateNotice("配色を保存できませんでした");
+                    }).setNegativeButton("キャンセル",null).show();
+        });
         addText("あいもげ");
         action("新しいスレを立てる", () -> compose(""));
         action("スレ一覧から返信", () -> threadPicker("aimoge"));

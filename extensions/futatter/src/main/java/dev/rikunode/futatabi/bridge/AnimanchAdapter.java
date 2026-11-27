@@ -52,6 +52,7 @@ final class AnimanchAdapter {
             "<a\\s+class=['\"]reslink['\"]\\s+href=['\"]#res([0-9]+)['\"][^>]*>&gt;&gt;[0-9]+</a>",
             Pattern.CASE_INSENSITIVE);
     private final SharedPreferences prefs;
+    private final Context context;
     private final Map<String, Cache> cache = new HashMap<>();
     private long lastRequest;
     private final File thumbnailCache;
@@ -69,6 +70,7 @@ final class AnimanchAdapter {
     }
 
     AnimanchAdapter(Context context) {
+        this.context=context;
         prefs = context.getSharedPreferences("futatabi_animanch_private", Context.MODE_PRIVATE);
         thumbnailCache = new File(context.getCacheDir(), "futatabi_animanch_images");
         for (int i = 0; i < imageLocks.length; i++) imageLocks[i] = new Object();
@@ -79,12 +81,12 @@ final class AnimanchAdapter {
             String path = rawPath.split("\\?", 2)[0];
             if (path.equals("/animanch/") || (path.equals("/animanch/futaba.php") &&
                     BridgeServer.hasCatalogMode(rawPath)))
-                return BridgeServer.BridgeResponse.html(catalog());
+                return BridgeServer.BridgeResponse.html(BridgePalette.decorate(context,catalog()));
             if (path.matches("/animanch/res/[0-9]{13}\\.htm")) {
                 String id = path.substring("/animanch/res/".length(), path.length() - 4);
                 String board = prefs.getString("board." + id, null);
                 if (board == null) return BridgeServer.BridgeResponse.text(404, "Unknown thread");
-                return BridgeServer.BridgeResponse.html(thread(id, board));
+                return BridgeServer.BridgeResponse.html(BridgePalette.decorate(context,thread(id, board)));
             }
             if (path.matches("/animanch/(thumb|cat|src)/[0-9]{13}s?\\.jpg")) {
                 String name = path.substring(path.lastIndexOf('/') + 1);

@@ -59,6 +59,18 @@ public final class MebukiBoardNameTest {
             }
         }
         check(migrated.equals(FutatabiProvider.completeBoards(migrated, false)), "idempotent migration");
-        System.out.println("PASS existing migration: same count, fields, other boards and order; idempotent");
+        // The stock backup reads/writes FlutterSharedPreferences.xml as a whole.
+        // Model the restored preference payload, not Android system backup.
+        android.content.Context restored=new android.content.Context();
+        android.content.SharedPreferences prefs=restored.getSharedPreferences("FlutterSharedPreferences",0);
+        prefs.edit().putString("flutter.itaList",migrated).commit();
+        check(BridgePalette.DARK.equals(BridgePalette.get(restored)),"default dark");
+        check(BridgePalette.save(restored,BridgePalette.LIGHT),"light save");
+        check(BridgePalette.LIGHT.equals(prefs.getString(BridgePalette.KEY,"")),"palette in stock backup preference file");
+        check(migrated.equals(FutatabiProvider.completeBoards(prefs.getString("flutter.itaList",null),true)),"restored list survives fresh migration");
+        check(BridgePalette.decorate("<head></head><body></body>",BridgePalette.get(restored)).contains("#fafafa"),"light HTML");
+        check(BridgePalette.decorate("<head></head><body></body>",BridgePalette.DARK).contains("#202124"),"dark HTML");
+        check(!BridgePalette.save(restored,"invalid")&&BridgePalette.LIGHT.equals(BridgePalette.get(restored)),"invalid palette rejected");
+        System.out.println("PASS existing migration: same count, fields, other boards and order; fresh restore, palette in stock preference file, dark/light");
     }
 }

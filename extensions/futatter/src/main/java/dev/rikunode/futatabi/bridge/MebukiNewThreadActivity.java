@@ -300,16 +300,26 @@ public final class MebukiNewThreadActivity extends Activity {
         final String saved=MebukiSession.saved(this);
         status.setText("公式スレ画面へ移動しました。投稿結果を確認中…");
         new Thread(()->{
-            boolean confirmed=false;
+            String verifiedId=null;
             try {
-                if (MebukiSession.sameAccount(saved,cookie))
-                    confirmed=MebukiSession.readThread(slug,cookie).matchesNewOwnThread(startedAt);
+                if (MebukiSession.sameAccount(saved,cookie)&&
+                        MebukiSession.readThread(slug,cookie).matchesNewOwnThread(startedAt))
+                    verifiedId=new MebukiAdapter(this).rememberPrivateThread(saved,slug);
             }catch(Exception ignored){}
-            final boolean matched=confirmed;
+            final String confirmedId=verifiedId;
             runOnUiThread(()->{
                 if(!alive())return;
-                status.setText(matched?"新しいスレの投稿者・作成時刻・画像添付を確認しました。元画面で再送しないでください。":
-                        "公式スレ画面で結果を確認してください。アプリでの照合は未確定です。再送にご注意ください。");
+                if(confirmedId!=null&&saved.equals(MebukiSession.saved(this))){
+                    try{
+                        startActivity(new Intent(this,MebukiReaderActivity.class).putExtra(MebukiReaderActivity.ID,confirmedId));
+                        finish();
+                        return;
+                    }catch(RuntimeException ex){
+                        status.setText("投稿を確認しましたが、スレ画面を開けませんでした。再送せず確認してください。");
+                        return;
+                    }
+                }
+                status.setText("公式スレ画面で結果を確認してください。アプリでの照合は未確定です。再送にご注意ください。");
             });
         },"futatabi-mebuki-new-confirm").start();
     }

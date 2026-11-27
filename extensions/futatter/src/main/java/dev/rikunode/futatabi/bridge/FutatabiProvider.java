@@ -105,14 +105,44 @@ public final class FutatabiProvider extends ContentProvider {
             }
         }
         // The flag gates only the legacy replacement, not missing default boards.
-        change |= ensureBoard(items, "二次元裏（img)", IMG, true);
         change |= ensureBoard(items, "二次元裏（may)", MAY, true);
+        change |= ensureBoard(items, "二次元裏（img)", IMG, true);
         // The stock Futaba parser already recognizes /jun/; no bridge route.
         change |= ensureBoard(items, "二次元裏（jun)", JUN, false);
+        change |= ensureBoard(items, "めぶきちゃんねる", MEBUKI, true);
         change |= ensureBoard(items, "あいもげ", AIMOGE, false);
         change |= ensureBoard(items, "あにまん", ANIMANCH, false);
-        change |= ensureBoard(items, "めぶきちゃんねる", MEBUKI, true);
+        change |= orderKnownBoards(items);
         return change ? FLUTTER_PREFIX + items.toString() : raw;
+    }
+
+    // Only fill slots already occupied by the six known URLs. Custom entries
+    // stay at their exact indices; preserve the original serialized records.
+    private static boolean orderKnownBoards(JSONArray items) throws Exception {
+        java.util.List<Integer> slots = new java.util.ArrayList<>();
+        java.util.List<String> entries = new java.util.ArrayList<>();
+        java.util.Map<String, Integer> ranks = new java.util.HashMap<>();
+        String[] order = {MAY, IMG, JUN, MEBUKI, AIMOGE, ANIMANCH};
+        for (int i = 0; i < order.length; i++) ranks.put(order[i], i);
+        java.util.Map<String, Integer> entryRanks = new java.util.HashMap<>();
+        for (int i = 0; i < items.length(); i++) {
+            String entry = items.getString(i);
+            Integer rank = ranks.get(new JSONObject(entry).optString("url"));
+            if (rank == null) continue;
+            slots.add(i);
+            entries.add(entry);
+            entryRanks.put(entry, rank);
+        }
+        entries.sort(java.util.Comparator.comparingInt(entryRanks::get));
+        boolean changed = false;
+        for (int i = 0; i < slots.size(); i++) {
+            int slot = slots.get(i);
+            if (!entries.get(i).equals(items.getString(slot))) {
+                items.put(slot, entries.get(i));
+                changed = true;
+            }
+        }
+        return changed;
     }
 
     private static boolean ensureBoard(JSONArray items, String name, String url, boolean normalizeName) throws Exception {

@@ -60,8 +60,40 @@ private val brandingTitleResources = rawResourcePatch {
         replaceChecked(0x99c26, oldUrl.toByteArray(Charsets.US_ASCII),
             issues.padEnd(oldUrl.length, ' ').toByteArray(Charsets.US_ASCII))
         val oldNotice = "機能改善のためのアンケートを募集しています\nご気軽にお答えください"
-        val newNotice = "不具合・要望はGitHub Issuesへ\n再現手順もお願いします"
-        replaceChecked(0x6d152, oldNotice.toByteArray(Charsets.UTF_16LE), newNotice.toByteArray(Charsets.UTF_16LE))
+        // The snapshot uses fixed-width serialized strings. Keep their byte
+        // lengths exactly unchanged; invisible padding is the existing title strategy.
+        fun replaceText(at: Int, before: String, after: String) {
+            if (after.length > before.length)
+                throw PatchException("futatabi: text exceeds verified snapshot slot")
+            replaceChecked(at, before.toByteArray(Charsets.UTF_16LE),
+                after.padEnd(before.length, '\u200b').toByteArray(Charsets.UTF_16LE))
+        }
+        // Reuse a longer constant Text from the hidden beta-test page so
+        // the notice can be polite without changing snapshot layout.
+        replaceChecked(0x6d152, oldNotice.toByteArray(Charsets.UTF_16LE),
+            oldNotice.toByteArray(Charsets.UTF_16LE))
+        replaceText(0xeab66,
+            "β版では、今後実装予定の新機能をいち早くお試しいただけます。テスト後に問題がなければ正式版としてリリースされます",
+            "不具合のご報告やご要望はGitHub Issuesへ。\nお手数ですが、再現手順もあわせてお知らせください。")
+        replaceChecked(0x8a9fb8, hex("707b409110ba40f9"), hex("706f409110f645f9"))
+        replaceText(0xa2502, "ブラウザでGoogleアンケートを開く", "GitHub Issuesを開く")
+
+        // The beta-test entry was removed from Settings above. Reuse its
+        // otherwise unreachable constant Text widget, without adding a Dart
+        // allocation or call site (which would need new GC stack metadata).
+        // The stats column keeps its host version widget and platform label.
+        val bundleVersion = BrandingAssets::class.java.classLoader
+            ?.getResourceAsStream("futatabi-patch-version.txt")?.use { it.bufferedReader().readText().trim() }
+            ?: throw PatchException("futatabi: missing bundle version resource")
+        if (!Regex("[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?").matches(bundleVersion))
+            throw PatchException("futatabi: invalid bundle version")
+        replaceText(0x80dea, "ふたったーでは、新機能の試用を目的としたベータテストを実施しています",
+            "android\nパッチ：ふたたび $bundleVersion")
+        // Replace the allocation of Text("android") by the constant Text
+        // at PP+0x1bbe0. Store the object in the same local used by the column.
+        replaceChecked(0x8f93a4,
+            hex("48c0f597e30300aa60ff66f9a3031ef860b000b8a0035ff8603001b8"),
+            hex("606f409100f045f9a0031ef81f2003d51f2003d51f2003d51f2003d5"))
         val stamp = Files.getLastModifiedTime(lib.toPath())
         lib.writeBytes(bytes)
         if (Files.getLastModifiedTime(lib.toPath()) == stamp)

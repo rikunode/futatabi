@@ -51,13 +51,40 @@ public final class MebukiBoardNameTest {
         String upgraded = FutatabiProvider.completeBoards(PREFIX + previous.toString(), false);
         JSONArray upgradeList = list(upgraded);
         check(upgradeList.length() == 6, "upgrade adds only Jun");
-        for (int i = 0; i < previous.length(); i++) check(previous.getString(i).equals(upgradeList.getString(i)), "upgrade preserves every original entry and order");
-        check(jun.equals(new JSONObject(upgradeList.getString(5)).optString("url")), "upgrade appended Jun");
+        check(fresh.equals(upgraded), "upgrade inserts Jun between img and external boards");
+        check(jun.equals(new JSONObject(upgradeList.getString(2)).optString("url")), "upgrade positions Jun");
         JSONObject customJun = new JSONObject(defaults.getString(junIndex)).put("name", "自分のjun").put("favorite", true).put("resuCount", 9);
         previous.put(customJun.toString());
         String preExisting = PREFIX + previous.toString();
-        check(preExisting.equals(FutatabiProvider.completeBoards(preExisting, false)), "preserve existing Jun name, data and order");
-        System.out.println("PASS fresh and upgraded registration: six boards, Jun direct URL, existing Jun preserved");
+        JSONArray reordered = list(FutatabiProvider.completeBoards(preExisting, false));
+        check(customJun.toString().equals(reordered.getString(2)), "preserve existing Jun name and fields");
+        String[] expected = {"https://may.2chan.net/b/", "https://img.2chan.net/b/", jun,
+                URL, "http://127.0.0.1:18765/aimoge/", "http://127.0.0.1:18765/animanch/"};
+        for (int i = 0; i < expected.length; i++)
+            check(expected[i].equals(new JSONObject(defaults.getString(i)).getString("url")), "fresh order");
+        // Exact beta.37 owner-reported order, with preserved record payloads.
+        JSONArray beta37 = new JSONArray();
+        for (int index : new int[]{0, 1, 4, 5, 3, 2}) beta37.put(defaults.getString(index));
+        check(fresh.equals(FutatabiProvider.completeBoards(PREFIX + beta37.toString(), false)), "owner beta.37 order corrected");
+        JSONArray mixed = new JSONArray();
+        String custom1 = new JSONObject().put("name", "custom1").put("url", "https://example.invalid/a/").put("favorite", true).toString();
+        String custom2 = new JSONObject().put("name", "custom2").put("url", "https://example.invalid/b/").put("resuCount", 77).toString();
+        mixed.put(previous.getString(0)).put(custom1).put(previous.getString(1)).put(previous.getString(2))
+                .put(custom2).put(previous.getString(3)).put(previous.getString(4)).put(previous.getString(5));
+        String mixedResult = FutatabiProvider.completeBoards(PREFIX + mixed.toString(), false);
+        JSONArray sorted = list(mixedResult);
+        check(custom1.equals(sorted.getString(1)) && custom2.equals(sorted.getString(4)), "custom slots unchanged");
+        int known = 0;
+        for (int i = 0; i < sorted.length(); i++) {
+            if (i == 1 || i == 4) continue;
+            check(expected[known++].equals(new JSONObject(sorted.getString(i)).getString("url")), "known relative order");
+        }
+        java.util.List<String> before = new java.util.ArrayList<>(), after = new java.util.ArrayList<>();
+        for (int i = 0; i < mixed.length(); i++) {before.add(mixed.getString(i));after.add(sorted.getString(i));}
+        java.util.Collections.sort(before);java.util.Collections.sort(after);
+        check(before.equals(after), "every record preserved");
+        check(mixedResult.equals(FutatabiProvider.completeBoards(mixedResult, false)), "order idempotent");
+        System.out.println("PASS F1 fresh/upgrade/custom slots, six known boards ordered, all records preserved");
 
         JSONObject old = mebuki(defaults);
         old.put("name", OLD).put("favorite", true).put("resuCount", 17);

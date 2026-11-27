@@ -220,8 +220,8 @@ final class MebukiThreadData {
                 String id=imageId.apply(p.image);
                 if(id!=null)h.append("<a href='/mebuki/src/").append(id).append(".jpg'>").append(id)
                         .append(".jpg</a><br><a href='/mebuki/src/").append(id)
-                        .append(".jpg'><img src='/mebuki/thumb/").append(id).append("s.jpg' width=")
-                        .append(p.imageWidth).append(" height=").append(p.imageHeight).append("></a>");
+                        .append(".jpg'><img src='/mebuki/thumb/").append(id).append("s.jpg' ")
+                        .append(ThreadImageSize.attributes(p.imageWidth,p.imageHeight)).append("></a>");
             }
             String body=esc(p.body).replace("\r\n","\n").replace("\r","\n").replace("\n","<br>");
             if(p.parent!=null)body="&gt;No."+numbers[p.parent]+"<br>"+body;

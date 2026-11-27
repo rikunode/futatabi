@@ -205,7 +205,9 @@ final class AimogeAdapter {
                 html.append("<a href='/aimoge/src/").append(imageId).append(".jpg'>")
                         .append(imageId).append(".jpg</a><br>")
                         .append("<a href='/aimoge/src/").append(imageId).append(".jpg'>")
-                        .append(thumbnailTag(attachment)).append("</a>");
+                        .append("<img src='/aimoge/thumb/").append(imageId).append("s.jpg' ")
+                        .append(ThreadImageSize.attributes(attachment.opt("width"),attachment.opt("height")))
+                        .append("></a>");
             }
             html.append("<span class='csb'>無念</span>Name<span class='cnm'>としあき</span>")
                     .append("<span class='cnw'>").append(escape(post.optString("createdAt", "")))

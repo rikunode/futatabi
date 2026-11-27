@@ -191,7 +191,8 @@ final class AnimanchAdapter {
                     html.append("<a href='/animanch/src/").append(photoId).append(".jpg'>")
                             .append(photoId).append(".jpg</a><br>")
                             .append("<a href='/animanch/src/").append(photoId).append(".jpg'>")
-                            .append("<img src='/animanch/thumb/").append(photoId).append("s.jpg' width=50 height=50></a>");
+                            .append("<img src='/animanch/thumb/").append(photoId).append("s.jpg' ")
+                            .append(ThreadImageSize.attributes(null,null)).append("></a>");
                 }
             }
             html.append("<blockquote>").append(FutabaQuoteMarkup.render(escape(text).replace("\n", "<br>")))

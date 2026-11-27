@@ -47,10 +47,15 @@ public final class BoardRecoveryActivity extends Activity {
             message = text.toString();
         }
         new AlertDialog.Builder(this).setTitle("追加板を復活")
-            .setMessage(message + "\n\nアプリを終了します。起動し直すと不足分だけ再登録します。")
+            .setMessage(message + "\n\nアプリを終了します。起動し直すと、削除した標準板と追加板も含めて不足分を再登録します。")
             .setNegativeButton("閉じる", (dialog, which) -> finish())
             .setOnCancelListener(dialog -> finish())
             .setPositiveButton("終了して復活", (dialog, which) -> {
+                if (!FutatabiProvider.requestBoardRecovery(this)) {
+                    android.widget.Toast.makeText(this, "復活の設定を保存できませんでした", android.widget.Toast.LENGTH_LONG).show();
+                    finish();
+                    return;
+                }
                 finishAffinity();
                 android.os.Process.killProcess(android.os.Process.myPid());
             }).show();

@@ -183,6 +183,31 @@ val bridgePatch = bytecodePatch(
             invoke-static {v0, v2}, Ldev/rikunode/futatabi/bridge/FutatabiProvider;->repairDecodedPreferences(Landroid/content/SharedPreferences;Ljava/util/Map;)V
         """)
 
+        // Stock ItaListNotifier._save uses setEncodedStringList.
+        // Observe only this exact key at its native commit boundary.
+        val setter = prefsClass.methods.singleOrNull {
+            it.name == "f" && it.parameterTypes.map { p -> p.toString() } ==
+                listOf("Ljava/lang/String;", "Ljava/lang/String;") && it.returnType == "Ljava/lang/Boolean;"
+        } ?: throw PatchException("futatabi: encoded-list setter missing")
+        val setterImpl = setter.implementation ?: throw PatchException("futatabi: encoded-list setter has no code")
+        val setterCode = setterImpl.instructions.toList()
+        val first = setterCode.firstOrNull() as? com.android.tools.smali.dexlib2.iface.instruction.TwoRegisterInstruction
+        val firstRef = (setterCode.firstOrNull() as? com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction)?.reference
+            as? com.android.tools.smali.dexlib2.iface.reference.FieldReference
+        if (setterImpl.registerCount != 4 || setterCode.size != 10 ||
+            setterCode.firstOrNull()?.opcode != Opcode.IGET_OBJECT || first?.registerA != 0 || first.registerB != 1 ||
+            firstRef?.definingClass != "Lg6/a;" || firstRef.name != "a" ||
+            (setterCode[5] as? Instruction35c)?.reference.let { it !is MethodReference || it.name != "commit" } ||
+            setterCode.last().opcode != Opcode.RETURN_OBJECT)
+            throw PatchException("futatabi: encoded-list setter instruction mismatch")
+        setter.addInstructionsWithLabels(0, """
+            iget-object v0, v1, Lg6/a;->a:Landroid/content/SharedPreferences;
+            invoke-static {v0, v2, v3}, Ldev/rikunode/futatabi/bridge/FutatabiProvider;->persistBoardList(Landroid/content/SharedPreferences;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/Boolean;
+            move-result-object v0
+            if-eqz v0, :originalSetter
+            return-object v0
+        """, ExternalLabel("originalSetter", setterCode[0]))
+
         // Intercept the exact empty-OK marker after stock showToast dispatch.
         val toastClass = mutableClassDefByOrNull("Ln6/e;")
             ?: throw PatchException("futatabi: toast plugin missing")

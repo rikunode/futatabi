@@ -1,6 +1,6 @@
 # futatabi
 
-**正式版 v0.4.2** — [ダウンロード](https://github.com/rikunode/futatabi/releases/tag/v0.4.2) ／ [リリースノート](docs/release-v0.4.2.md)
+**正式版 v0.4.3** — [ダウンロード](https://github.com/rikunode/futatabi/releases/tag/v0.4.3) ／ [リリースノート](docs/release-v0.4.3.md)
 
 **ふたったー 3.1.1（`com.Nanasaki.ftutter`、versionCode 65）専用の非公式 Morphe パッチセット。** ARM64 で検証済み。GPL-3.0。元アプリの使い勝手を保ちながら、標準6板の閲覧・投稿に対応します。
 
@@ -10,14 +10,14 @@
 
 1. [Google Play](https://play.google.com/store/apps/details?id=com.Nanasaki.ftutter) からふたったーをインストールし、バージョンが **3.1.1** であることを確認します。[Morphe Manager](https://github.com/MorpheApp/morphe-manager/releases) も用意します。
 2. スマートフォンで **[ふたたびをMorpheに追加](https://morphe.software/add-source?github=rikunode/futatabi)** を開きます。Morphe公式案内では、Managerにリポジトリが渡され、追加前に確認画面が表示されます。追加を承認してください。
-3. リンクからManagerに移動できない場合は、Managerの Sources → + → Remote に https://github.com/rikunode/futatabi を入力して追加します。ソースの版が **0.4.2** であることを確認します。
+3. リンクからManagerに移動できない場合は、Managerの Sources → + → Remote に https://github.com/rikunode/futatabi を入力して追加します。ソースの版が **0.4.3** であることを確認します。
 4. Expert mode の「Select other apps」からインストール済みのふたったーを選択し、ふたたびのソースからパッチを選択して適用します。Manager の案内に沿って署名・インストールします。既定では元のアプリと共存するクローンになります。
 
 このリンクは公開作業時にHTTP 200を確認しました。URL追加とRemoteの手順は [Morphe公式のパッチソース案内](https://github.com/MorpheApp/morphe-manager/blob/main/docs/patch-sources.md) に基づきます。このリンクからの実端末での登録・パッチ適用・インストールの一連の操作は今回未検証です。Managerの版やリンクの関連付けにより操作が異なる場合があります。
 
 ### .mppを手動で追加（予備）
 
-[Releases](https://github.com/rikunode/futatabi/releases/tag/v0.4.2) から .mpp と SHA256SUMS を取得し、SHA-256を照合してください。Managerの Sources → + → Local から .mpp を選択し、上記4の手順で適用します。公式案内ではLocalソースは自動更新されないため、更新時は新しいファイルを指定します。
+[Releases](https://github.com/rikunode/futatabi/releases/tag/v0.4.3) から .mpp と SHA256SUMS を取得し、SHA-256を照合してください。Managerの Sources → + → Local から .mpp を選択し、上記4の手順で適用します。公式案内ではLocalソースは自動更新されないため、更新時は新しいファイルを指定します。
 
 Google Play で対象版を入手できない場合は [APKPure の 3.1.1 XAPK](https://apkpure.net/jp/%E3%81%B5%E3%81%9F%E3%81%A3%E3%81%9F%E3%83%BC-%E3%81%B5%E3%81%9F%E3%81%B0%E5%B0%82%E7%94%A8%E3%82%A2%E3%83%97%E3%83%AA/com.Nanasaki.ftutter/download) が予備の入手先です。Manager の[公式案内](https://github.com/MorpheApp/morphe-manager/blob/main/docs/patching-process.md)ではスプリット APK の統合に対応していますが、このアプリのインストール済みスプリット／XAPK からの一連の操作は Manager の版・端末構成によって異なり、ここでは実機での再検証は行っていません。手動マージを必須とはしていません。[インストール済みアプリの選択に関する公式案内](https://github.com/MorpheApp/morphe-manager/blob/main/docs/home-screen.md)。
 
@@ -40,7 +40,7 @@ Google Play で対象版を入手できない場合は [APKPure の 3.1.1 XAPK](
 
 旧ふたったーからHTTPS設定を復元しても、追加3板の端末内ブリッジだけはHTTPのまま利用します。純正板のHTTPS設定は変更しません。
 
-純正バックアップを復元した後はアプリを完全に終了して起動し直すと、不足する標準板を補完します。旧形式の板リストも純正デコーダー経由で補完します。既存の板が表示されない場合は板一覧の「＋ 板追加」からURL欄を空欄のままOKを押し、追加3板の登録状態を確認して「終了して復活」を選び、アプリを起動し直してください。追加板の配色は復元された明示値を優先し、欠けた場合だけ端末内に保持した控えから復元します（控えがない場合は既定のダーク）。
+純正バックアップを復元した後はアプリを完全に終了して起動し直すと、意図的に削除していない標準板・追加板の不足分を補完します。旧形式の板リストも純正デコーダー経由で補完します。板一覧から自分で削除した板は再起動しても復活しません。削除を取り消す場合や既存の板が表示されない場合は板一覧の「＋ 板追加」からURL欄を空欄のままOKを押し、追加3板の登録状態を確認して「終了して復活」を選び、アプリを起動し直してください。この操作は削除済みの標準6板も含めて再登録します。v0.4.2以前の削除意図は記録されていないため、更新時に一度復活する場合があります。追加板の配色は復元された明示値を優先し、欠けた場合だけ端末内に保持した控えから復元します（控えがない場合は既定のダーク）。
 
 純正の設定バックアップ／復元は FlutterSharedPreferences.xml 全体を対象とするため、追加板リスト（flutter.itaList）も含まれます。復元後は既存の不足板補完が動作し、独自板・既存設定を保持します。拡張ホームの「追加板の配色」でダーク（既定）／ライトを選択でき、この選択も同じ設定ファイルに保存します。対象はブリッジ生成HTMLと専用リーダーで、純正Flutterの描画テーマは変更しません。別ファイルにある認証情報、投稿履歴、仮想ID対応表は移行対象外です。古いお気に入り等の仮想ID移行は未対応。実機でのバックアップファイルの作成・復元は未検証です。
 

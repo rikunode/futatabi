@@ -26,6 +26,7 @@ private fun ByteArray.replyHash() = MessageDigest.getInstance("SHA-256").digest(
 // Exact loopback host and board only; stock pencil and long-press are untouched.
 // The ELF RX segment is extended only into verified zero padding.
 internal val threadReplyResources = rawResourcePatch {
+    dependsOn(arm64TargetGuard)
     execute {
         val lib = get("lib/arm64-v8a/libapp.so")
         if (!lib.isFile) throw PatchException("futatabi: missing ARM64 reply resources")

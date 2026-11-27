@@ -24,6 +24,7 @@ import org.w3c.dom.Element
  * runtime never relies on a hardcoded provider authority.
  */
 private val bridgeManifestPatch = resourcePatch {
+    dependsOn(arm64TargetGuard)
     execute {
         document("AndroidManifest.xml").use { document ->
             val manifest = document.documentElement

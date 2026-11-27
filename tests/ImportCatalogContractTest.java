@@ -28,8 +28,8 @@ public final class ImportCatalogContractTest {
                         String body;
                         if(u.getHost().equals("api.nijiurachan.net")&&u.getPath().equals("/client-policy"))
                             body="{\"boardKey\":\"aimg\"}";
-                        else if(u.getHost().equals("api.nijiurachan.net")&&u.getFile().equals("/catalog/aimg?sort=bump&limit=20&page=1"))
-                            body="{\"threads\":[{\"id\":\"12345678-1234-1234-1234-123456789012\",\"replyCount\":3,\"opPost\":{\"body\":\"aimoge fixture\"}}]}";
+                        else if(u.getHost().equals("api.nijiurachan.net")&&u.getFile().equals("/catalog/aimg?sort=bump&limit=100&page=1"))
+                            body="{\"threads\":[{\"id\":\"12345678-1234-1234-1234-123456789012\",\"replyCount\":3,\"opPost\":{\"body\":\"aimoge fixture\"}}],\"pagination\":{\"page\":1,\"limit\":100,\"hasNextPage\":false}}";
                         else if(u.getHost().equals("mebuki.moe")&&u.getPath().equals("/api/trial/trending"))
                             body="{\"threads\":[{\"slug\":\"fixture123\",\"name\":\"mebuki fixture\",\"messageCount\":4}]}";
                         else if(u.getHost().equals("bbs.animanch.com")&&u.getPath().equals("/"))

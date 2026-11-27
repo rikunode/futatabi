@@ -16,6 +16,7 @@ private object BrandingAssets
 // All existing AOT writers verify full-file hashes during execute. Rename only
 // after their writes, at the verified standalone UTF-16 snapshot string.
 private val brandingTitleResources = rawResourcePatch {
+    dependsOn(arm64TargetGuard)
     finalize {
         val lib = get("lib/arm64-v8a/libapp.so")
         val bytes = lib.readBytes()

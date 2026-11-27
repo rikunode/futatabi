@@ -172,7 +172,10 @@ public final class MebukiLoginActivity extends Activity {
                 if("mebuki.moe".equals(Uri.parse(url).getHost()))view.evaluateJavascript(MebukiPwaBanner.SCRIPT,null);
             }
             @Override public void onPageFinished(WebView view, String url) {
-                if("mebuki.moe".equals(Uri.parse(url).getHost()))view.evaluateJavascript(MebukiPwaBanner.SCRIPT,null);
+                if ("mebuki.moe".equals(Uri.parse(url).getHost())) {
+                    view.evaluateJavascript(MebukiPwaBanner.SCRIPT, null);
+                    view.evaluateJavascript(MebukiGoogleButton.SCRIPT, null);
+                }
                 if (diagnostics != null) diagnostics.snapshot(view, "page_finished");
                 if (!pageFailed && url.equals(view.getUrl())) {
                     showNavigation(url, false);

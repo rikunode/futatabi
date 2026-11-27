@@ -12,7 +12,7 @@ import org.w3c.dom.Element
 
 // No Dart instructions are changed. Gate the native maintenance against the
 // exact stock/known combined AOT layouts whose cache behavior was inspected.
-private val cacheTargetGuard = rawResourcePatch {
+internal val cacheTargetGuard = rawResourcePatch {
     execute {
         val bytes = get("lib/arm64-v8a/libapp.so").readBytes()
         val digest = MessageDigest.getInstance("SHA-256").digest(bytes)

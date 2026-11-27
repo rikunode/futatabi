@@ -33,9 +33,31 @@ public final class MebukiBoardNameTest {
     public static void main(String[] args) throws Exception {
         String fresh = FutatabiProvider.completeBoards(null, true);
         JSONArray defaults = list(fresh);
-        check(defaults.length() == 5, "five initial boards");
+        check(defaults.length() == 6, "six initial boards");
         mebuki(defaults);
-        System.out.println("PASS fresh registration: five boards, one official Mebuki name");
+        String jun = "https://jun.2chan.net/jun/";
+        int junIndex = -1;
+        for (int i = 0; i < defaults.length(); i++) {
+            JSONObject item = new JSONObject(defaults.getString(i));
+            if (jun.equals(item.optString("url"))) {
+                check(junIndex < 0, "one Jun board");
+                junIndex = i;
+                check("二次元裏（jun)".equals(item.optString("name")), "Jun name");
+            }
+        }
+        check(junIndex >= 0, "Jun uses stock direct URL");
+        JSONArray previous = new JSONArray();
+        for (int i = 0; i < defaults.length(); i++) if (i != junIndex) previous.put(defaults.getString(i));
+        String upgraded = FutatabiProvider.completeBoards(PREFIX + previous.toString(), false);
+        JSONArray upgradeList = list(upgraded);
+        check(upgradeList.length() == 6, "upgrade adds only Jun");
+        for (int i = 0; i < previous.length(); i++) check(previous.getString(i).equals(upgradeList.getString(i)), "upgrade preserves every original entry and order");
+        check(jun.equals(new JSONObject(upgradeList.getString(5)).optString("url")), "upgrade appended Jun");
+        JSONObject customJun = new JSONObject(defaults.getString(junIndex)).put("name", "自分のjun").put("favorite", true).put("resuCount", 9);
+        previous.put(customJun.toString());
+        String preExisting = PREFIX + previous.toString();
+        check(preExisting.equals(FutatabiProvider.completeBoards(preExisting, false)), "preserve existing Jun name, data and order");
+        System.out.println("PASS fresh and upgraded registration: six boards, Jun direct URL, existing Jun preserved");
 
         JSONObject old = mebuki(defaults);
         old.put("name", OLD).put("favorite", true).put("resuCount", 17);

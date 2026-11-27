@@ -206,6 +206,12 @@ public class FutatabiHomeActivity extends Activity {
                         }else updateNotice("配色を保存できませんでした");
                     }).setNegativeButton("キャンセル",null).show();
         });
+        if (CacheMaintenanceProvider.lastReport() != null) {
+            action("キャッシュ診断（起動時）", () -> new android.app.AlertDialog.Builder(this)
+                    .setTitle("キャッシュ診断（起動時）")
+                    .setMessage(CacheMaintenanceProvider.lastReport())
+                    .setPositiveButton("閉じる", null).show());
+        }
         addText("あいもげ");
         action("新しいスレを立てる", () -> compose(""));
         action("スレ一覧から返信", () -> threadPicker("aimoge"));

@@ -130,20 +130,27 @@ final class AnimanchAdapter {
     }
 
     private synchronized byte[] catalog(int sort) throws Exception {
+        return catalog(sort, null);
+    }
+
+    // Alternate Image NG renderer; no extra upstream requests.
+    synchronized byte[] catalog(int sort, java.util.function.Predicate<String> hiddenImage) throws Exception {
         JSONArray items = CatalogOrder.replies(threadsJson().getJSONArray("threads"),sort);
         Map<String,String> pending = new HashMap<>();
         StringBuilder html = page("あにまん");
         html.append("<table id='cattable'><tr>");
+        int visible = 0;
         for (int i = 0; i < items.length(); i++) {
             JSONObject item = items.getJSONObject(i);
             String id = item.getString("id");
             String boardId = prefs.getString("board." + id, "");
             String imageId = remember("image.", HOST + "/thumb_s/" + boardId + "/", pending);
+            if (hiddenImage != null && hiddenImage.test(imageId)) continue;
+            if (visible++ > 0 && (visible - 1) % 5 == 0) html.append("</tr><tr>");
             html.append("<td><a href='res/").append(id).append(".htm'>")
                 .append("<img src='/animanch/thumb/").append(imageId).append("s.jpg'></a>")
                 .append("<small>").append(escape(item.getString("title"))).append("</small>")
                 .append("<font size=2>").append(item.optInt("replies")).append("</font></td>");
-            if (i % 5 == 4 && i != items.length() - 1) html.append("</tr><tr>");
         }
         commitCatalogIndex(pending);
         html.append("</tr></table></body></html>");

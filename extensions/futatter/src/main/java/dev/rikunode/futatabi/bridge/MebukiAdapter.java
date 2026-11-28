@@ -249,6 +249,11 @@ final class MebukiAdapter {
     }
 
     private byte[] catalog(boolean internal,int sort) throws Exception {
+        return catalog(internal,sort,null);
+    }
+
+    // Filter only internal catalogs; never reveal local rules to another peer.
+    byte[] catalog(boolean internal,int sort,java.util.function.Predicate<String> hiddenImage) throws Exception {
         JSONObject result=threadsJson(internal,sort);
         JSONArray items = result.getJSONArray("threads");
         StringBuilder html = new StringBuilder("<html><head><meta charset='Shift_JIS'></head><body>");
@@ -256,15 +261,17 @@ final class MebukiAdapter {
                 "<small>めぶきちゃんねる おためし（5分遅延／認証済み一覧を取得できません）</small>":
                 (sort==0||sort==8?"<small>めぶきちゃんねる（認証済み／最新更新順）</small>":"<small>めぶきちゃんねる（認証済み）</small>"));
         html.append("<table id='cattable'><tr>");
+        int visible=0;
         for (int i = 0; i < items.length(); i++) {
             JSONObject item = items.getJSONObject(i);
             String id = item.getString("id");
-            html.append("<td><a href='res/").append(id).append(".htm'>");
             String imageId = item.optString("imageId", "");
+            if (internal && !imageId.isEmpty() && hiddenImage != null && hiddenImage.test(imageId)) continue;
+            if (visible++ > 0 && (visible - 1) % 5 == 0) html.append("</tr><tr>");
+            html.append("<td><a href='res/").append(id).append(".htm'>");
             if (!imageId.isEmpty()) html.append("<img src='/mebuki/thumb/").append(imageId).append("s.jpg'>");
             html.append("</a><small>").append(escape(item.optString("title", ""))).append("</small>");
             html.append("<font size=2>").append(item.optInt("replies", 0)).append("</font></td>");
-            if (i % 5 == 4 && i != items.length() - 1) html.append("</tr><tr>");
         }
         html.append("</tr></table></body></html>");
         return html.toString().getBytes(SJIS);

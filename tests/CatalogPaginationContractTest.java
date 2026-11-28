@@ -63,6 +63,53 @@ public final class CatalogPaginationContractTest {
         }
         return b.append("]}").toString();
     }
+    // Host-only fallback proof using real adapter HTML and feature-only rules.
+    interface NgRender { byte[] render(java.util.function.Predicate<String> hidden)throws Exception; }
+    private static void imageNgFallback(String board,NgRender render)throws Exception{
+        byte[] before=render.render(null);
+        String html=new String(before,SJIS);
+        java.util.regex.Matcher m=Pattern.compile("<img src='/"+board+"/thumb/([0-9]{13})s[.]jpg'").matcher(html);
+        check(m.find(),"first actual image "+board);String selected=m.group(1);
+        check(m.find(),"second actual image "+board);String other=m.group(1);
+        check(!selected.equals(other),"different image identifiers");
+        Path temp=Files.createTempDirectory("ng-bridge-probe");
+        try{
+            Class<dev.rikunode.futatabi.imageng.ImageNgStore> type=dev.rikunode.futatabi.imageng.ImageNgStore.class;
+            java.lang.reflect.Constructor<dev.rikunode.futatabi.imageng.ImageNgStore> ctor=type.getDeclaredConstructor(File.class);
+            ctor.setAccessible(true);
+            dev.rikunode.futatabi.imageng.ImageNgStore store=ctor.newInstance(temp.toFile());
+            dev.rikunode.futatabi.imageng.ImageNgCatalogIndex idx=new dev.rikunode.futatabi.imageng.ImageNgCatalogIndex();
+            String base="http://127.0.0.1:18765/"+board+"/";
+            dev.rikunode.futatabi.imageng.ImageNgCatalogIndex.Variant variant=dev.rikunode.futatabi.imageng.ImageNgCatalogIndex.Variant.THUMB;
+            int[] pixels=new int[64];Arrays.fill(pixels,0xff123456);
+            dev.rikunode.futatabi.imageng.ImageNgFeatures a=dev.rikunode.futatabi.imageng.ImageNgFeatures.extract(new byte[]{1},pixels,8,8,8,8,1,dev.rikunode.futatabi.imageng.ImageNgFeatures.Kind.THUMBNAIL);
+            dev.rikunode.futatabi.imageng.ImageNgFeatures b=dev.rikunode.futatabi.imageng.ImageNgFeatures.extract(new byte[]{2},pixels,8,8,8,8,1,dev.rikunode.futatabi.imageng.ImageNgFeatures.Kind.THUMBNAIL);
+            long epoch=idx.begin(board);
+            check(idx.observe(epoch,dev.rikunode.futatabi.imageng.ImageNgCatalogIndex.key(base,selected,variant),a),"observe selected");
+            check(idx.observe(epoch,dev.rikunode.futatabi.imageng.ImageNgCatalogIndex.key(base,other,variant),b),"observe other");
+            java.util.function.Predicate<String> filter=id->idx.hidden(dev.rikunode.futatabi.imageng.ImageNgCatalogIndex.key(base,id,variant),store.list());
+            check(Arrays.equals(before,render.render(filter)),"empty NG byte-identical");
+            dev.rikunode.futatabi.imageng.ImageNgStore.Rule rule=store.add(a,dev.rikunode.futatabi.imageng.ImageNgStore.Mode.EXACT,board,"fixture");
+            BridgeServer.BridgeResponse original=BridgeServer.BridgeResponse.html(before);
+            BridgeServer.BridgeResponse filtered=BridgeServer.BridgeResponse.html(render.render(filter));
+            List<String> old=cells(original), now=cells(filtered), expected=new ArrayList<>(old);expected.remove(0);
+            check(now.equals(expected),"only selected cell removed, order kept");
+            check(!new String(filtered.bytes,SJIS).contains("/thumb/"+selected+"s.jpg"),"selected image absent");
+            check(new String(filtered.bytes,SJIS).contains("/thumb/"+other+"s.jpg"),"other image remains");
+            store.setEnabled(rule.id,false);
+            check(Arrays.equals(before,render.render(filter)),"disabled restores identical catalog");
+            store.setEnabled(rule.id,true);
+            check(cells(BridgeServer.BridgeResponse.html(render.render(filter))).equals(expected),"re-enabled hides same cell");
+            store.remove(rule.id);
+            check(Arrays.equals(before,render.render(filter)),"deleted restores identical catalog");
+            System.out.println("PASS Image NG fallback "+board+": "+old.size()+" -> "+now.size()+" -> "+old.size()+"; exact feature rule, order, disable/delete");
+        }finally{
+            try(java.util.stream.Stream<Path> files=Files.list(temp)){
+                for(Path f:(Iterable<Path>)files::iterator)Files.delete(f);
+            }
+            Files.delete(temp);
+        }
+    }
     public static void main(String[] args)throws Exception{
         URL.setURLStreamHandlerFactory(protocol->new URLStreamHandler(){
             protected URLConnection openConnection(URL u){
@@ -85,6 +132,19 @@ public final class CatalogPaginationContractTest {
                 };
             }
         });
+        if(args.length==1&&args[0].equals("--image-ng-probe")){
+            total=7;aimoge=new AimogeAdapter(new Context());
+            imageNgFallback("aimoge",hidden->aimoge.catalog(0,hidden));
+            animanch=cards(7);
+            AnimanchAdapter a=new AnimanchAdapter(new Context());
+            imageNgFallback("animanch",hidden->a.catalog(0,hidden));
+            authenticated=mebuki(7);trial=new JSONObject().put("threads",new JSONArray().put(new JSONObject().put("slug","trialA123").put("name","A").put("messageCount",10))).toString();
+            Context c=new Context();c.getSharedPreferences(MebukiSession.STORE,0).edit().putString(MebukiSession.KEY,"fixture_session=only").commit();
+            MebukiAdapter mb=new MebukiAdapter(c);
+            imageNgFallback("mebuki",hidden->mb.catalog(true,0,hidden));
+            check(Arrays.equals(mb.catalog(false,0,null),mb.catalog(false,0,id->{throw new AssertionError("non-owner filter called");})),"public response unchanged");
+            return;
+        }
         Context c=new Context();aimoge=new AimogeAdapter(c);
         String a="/aimoge/futaba.php?mode=cat";
         List<String> base=cells(aimoge.route(a));

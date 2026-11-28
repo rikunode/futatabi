@@ -139,25 +139,33 @@ final class AimogeAdapter {
     }
 
     private byte[] catalog(int sort) throws Exception {
+        return catalog(sort, null);
+    }
+
+    // Alternate Image NG renderer. The normal route does not supply a filter.
+    byte[] catalog(int sort, java.util.function.Predicate<String> hiddenImage) throws Exception {
         JSONArray threads = catalogThreads(sort);
         synchronized(ids) {
             Map<String,String> pending=new HashMap<>();
             StringBuilder html = pageStart("あいもげ");
             html.append("<table id='cattable'><tr>");
+            int visible = 0;
             for (int i = 0; i < threads.length(); i++) {
                 JSONObject t = threads.getJSONObject(i);
                 String uuid = t.getString("id");
                 String tid = ids.catalogThreadId(uuid,pending);
                 JSONObject op = t.getJSONObject("opPost");
                 JSONObject attachment = attachment(op);
-                String thumb = thumbnailTag(attachment,pending);
+                String image = attachment == null ? null : imageId(attachment,pending);
+                if (image != null && hiddenImage != null && hiddenImage.test(image)) continue;
+                if (visible++ > 0 && (visible - 1) % 5 == 0) html.append("</tr><tr>");
+                String thumb = image == null ? "" : "<img src='/aimoge/thumb/" + image + "s.jpg' width=50 height=50>";
                 String description = op.optString("body", "");
                 if (description.length() > 90) description = description.substring(0, 90);
                 html.append("<td><a href='res/").append(tid).append(".htm'>")
                         .append(thumb).append("</a><small>")
                         .append(escape(description)).append("</small><font size=2>")
                         .append(Math.max(0, t.optInt("replyCount", 0))).append("</font></td>");
-                if (i % 5 == 4 && i < threads.length() - 1) html.append("</tr><tr>");
             }
             ids.commitCatalog(pending);
             html.append("</tr></table></body></html>");
@@ -263,12 +271,6 @@ final class AimogeAdapter {
         }
         html.append("</div></body></html>");
         return html.toString().getBytes(SJIS);
-    }
-
-    private String thumbnailTag(JSONObject attachment,Map<String,String> pending) {
-        if (attachment == null) return "";
-        String id = imageId(attachment,pending);
-        return "<img src='/aimoge/thumb/" + id + "s.jpg' width=50 height=50>";
     }
 
     private String imageId(JSONObject attachment) {

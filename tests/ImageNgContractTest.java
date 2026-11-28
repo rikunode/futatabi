@@ -47,7 +47,38 @@ public final class ImageNgContractTest {
         return new ImageNgFeatures(sha,p,d,r,ImageNgFeatures.Kind.THUMBNAIL);
     }
     private static String bits(int n){return String.format(Locale.ROOT,"%016x",(1L<<n)-1);}
+    private static byte[] exif(int orientation,boolean little){
+        java.nio.ByteBuffer b=java.nio.ByteBuffer.allocate(26).order(little?
+            java.nio.ByteOrder.LITTLE_ENDIAN:java.nio.ByteOrder.BIG_ENDIAN);
+        b.put((byte)(little?'I':'M')).put((byte)(little?'I':'M')).putShort((short)42).putInt(8);
+        b.putShort((short)1).putShort((short)0x112).putShort((short)3).putInt(1);
+        b.putShort((short)orientation).putShort((short)0).putInt(0);
+        return b.array();
+    }
+    private static byte[] join(byte[]... arrays)throws Exception{
+        ByteArrayOutputStream b=new ByteArrayOutputStream();
+        for(byte[] a:arrays)b.write(a);
+        return b.toByteArray();
+    }
+    private static void metadataTests()throws Exception{
+        for(int o=1;o<=8;o++)for(boolean little:new boolean[]{true,false}){
+            byte[] t=exif(o,little);
+            byte[] jpg=join(new byte[]{(byte)255,(byte)216,(byte)255,(byte)225,0,34,69,120,105,102,0,0},t,new byte[]{(byte)255,(byte)217});
+            byte[] png=join(new byte[]{(byte)137,80,78,71,13,10,26,10,0,0,0,26,101,88,73,102},t,new byte[4]);
+            byte[] webp=join(new byte[]{82,73,70,70,38,0,0,0,87,69,66,80,69,88,73,70,26,0,0,0},t);
+            check(ImageNgDecoder.orientation(jpg)==o,"JPEG EXIF "+o);
+            check(ImageNgDecoder.orientation(png)==o,"PNG EXIF "+o);
+            check(ImageNgDecoder.orientation(webp)==o,"WebP EXIF "+o);
+        }
+        check(ImageNgDecoder.orientation(new byte[]{71,73,70,56,57,97})==1,"GIF orientation");
+        boolean rejected=false;
+        try{ImageNgDecoder.orientation(new byte[]{(byte)255,(byte)216,(byte)255,(byte)225,0,100});}
+        catch(IllegalArgumentException e){rejected=true;}
+        check(rejected,"malformed EXIF container rejected");
+    }
+
     public static void main(String[] args)throws Exception{
+        metadataTests();
         ImageNgFeatures.Kind thumb=ImageNgFeatures.Kind.THUMBNAIL,original=ImageNgFeatures.Kind.ORIGINAL;
         int recompressed=0,resized=0,unrelated=0,comparisons=0;
         ArrayList<ImageNgFeatures> features=new ArrayList<>();
@@ -101,6 +132,8 @@ public final class ImageNgContractTest {
             check(x.phash.equals(y.phash)&&x.dhash.equals(y.dhash)&&x.aspectRatio==y.aspectRatio,"orientation "+o);
         }
 
+        check(ImageNgDialogs.previewMatches(features.get(0),Arrays.asList(features.get(0),features.get(1)),false)==1,"preview exact count");
+        check(ImageNgDialogs.previewMatches(features.get(0),Arrays.asList(features.get(0),features.get(1)),true)==1,"preview similar count");
         Path dir=Files.createTempDirectory("image-ng-fixture");
         try{
             ImageNgStore store=new ImageNgStore(dir.toFile());
